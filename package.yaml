@@ -36,16 +36,17 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
-    - ghc-typelits-knownnat
-    - ghc-typelits-natnormalise
-    - sized
-    - type-natural
+    - lens
+    - mtl
+    - vector
   default-extensions:
     - DataKinds
     - GADTs
     - GeneralizedNewtypeDeriving
     - KindSignatures
+    - LambdaCase
     - RankNTypes
+    - TupleSections
     - TypeOperators
 
 tests:
