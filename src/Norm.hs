@@ -1,26 +1,19 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -fplugin GHC.TypeLits.Normalise #-}
-{-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
-
 module Norm (quote, nf) where
 
-
-import           Data.Type.Natural
-import           Data.Type.Ordinal
 import           Eval
 import           Syntax
 import           Value
 
 -- | Convert De Bruijn level to index
-lvl2Ix :: KnownNat n => SNat n -> Lvl -> Ix n
-lvl2Ix l (SomeSNat x) = sNatToOrd (sPred (l %- x)) -- TODO
+lvl2Ix :: Int -> Lvl -> Ix
+lvl2Ix l x = l - x - 1
 
 -- | Normalization by evaulation
-quote :: KnownNat n => SNat n -> Val -> Tm n
+quote :: Int -> Val -> Tm
 quote l (VVar x)   = Var (lvl2Ix l x)
 quote l (VApp t u) = App (quote l t) (quote l u)
-quote l (VLam c)   = Lam (quote (sS l) (c <@> VVar (SomeSNat l)))
+quote l (VLam c)   = Lam (quote (l + 1) (c <@> VVar l))
 
 -- | Normalization by evaulation
-nf :: KnownNat n => Env n -> Tm n -> Tm n
-nf env t = quote (envLength env) (eval env t)
+nf :: Env -> Tm -> Tm
+nf env t = quote (length env) (eval env t)
