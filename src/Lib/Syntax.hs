@@ -1,12 +1,18 @@
-module Syntax (Ix, Lvl, Ty, Tm(..)) where
+module Lib.Syntax (Ix, Lvl, Named(..), Ty, Tm(..)) where
 
-import Raw
+import                GHC.Base
+import                GHC.Show
+import {-# SOURCE #-} Lib.Meta
+import                Lib.Raw
 
 -- | De Bruijn index.
 type Ix = Int
 
 -- | De Bruijn level.
 type Lvl = Int
+
+data Named = Bound | Defined
+    deriving (Eq, Show)
 
 -- | Types.
 type Ty = Tm
@@ -20,4 +26,7 @@ data Tm
     | Let Name Ty Tm Tm
     | U
     | Pi Name Ty Ty
+    | Meta MVar
+      -- | Inserted meta
+    | IMeta MVar [Named]
     deriving (Eq, Show)

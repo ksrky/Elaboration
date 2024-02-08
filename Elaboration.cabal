@@ -25,13 +25,14 @@ source-repository head
 
 library
   exposed-modules:
-      Elab
-      Eval
-      Norm
-      Raw
-      Syntax
-      Value
-      Value.Env
+      Lib.Elab
+      Lib.Eval
+      Lib.Meta
+      Lib.Raw
+      Lib.Syntax
+      Lib.Unify
+      Lib.Value
+      Lib.Value.Env
   other-modules:
       Paths_Elaboration
   autogen-modules:
@@ -42,14 +43,17 @@ library
       DataKinds
       GADTs
       GeneralizedNewtypeDeriving
+      ImportQualifiedPost
       KindSignatures
       LambdaCase
+      NoImplicitPrelude
       RankNTypes
       TupleSections
       TypeOperators
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , containers
     , lens
     , mtl
     , vector

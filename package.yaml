@@ -36,6 +36,7 @@ ghc-options:
 library:
   source-dirs: src
   dependencies:
+    - containers
     - lens
     - mtl
     - vector
@@ -43,8 +44,10 @@ library:
     - DataKinds
     - GADTs
     - GeneralizedNewtypeDeriving
+    - ImportQualifiedPost
     - KindSignatures
     - LambdaCase
+    - NoImplicitPrelude
     - RankNTypes
     - TupleSections
     - TypeOperators
