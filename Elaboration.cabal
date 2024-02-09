@@ -28,6 +28,7 @@ library
       Lib.Elab
       Lib.Eval
       Lib.Meta
+      Lib.Parser
       Lib.Raw
       Lib.Syntax
       Lib.Unify
@@ -40,24 +41,22 @@ library
   hs-source-dirs:
       src
   default-extensions:
-      DataKinds
-      GADTs
-      GeneralizedNewtypeDeriving
       ImportQualifiedPost
-      KindSignatures
       LambdaCase
+      OverloadedStrings
       NoImplicitPrelude
-      RankNTypes
       TupleSections
-      TypeOperators
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
     , containers
     , lens
+    , megaparsec
     , mtl
+    , safe-exceptions
+    , text
     , vector
-  default-language: Haskell2010
+  default-language: GHC2021
 
 test-suite Elaboration-test
   type: exitcode-stdio-1.0
@@ -68,8 +67,14 @@ test-suite Elaboration-test
       Paths_Elaboration
   hs-source-dirs:
       test
+  default-extensions:
+      ImportQualifiedPost
+      LambdaCase
+      OverloadedStrings
+      NoImplicitPrelude
+      TupleSections
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Elaboration
     , base >=4.7 && <5
-  default-language: Haskell2010
+  default-language: GHC2021

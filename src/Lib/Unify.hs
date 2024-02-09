@@ -1,8 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Lib.Unify (invert, rename, unify) where
+module Lib.Unify (UnifyError(..), invert, rename, unify) where
 
 import Control.Applicative
+import Control.Exception.Safe
 import Control.Lens.Combinators
 import Control.Monad
 import Control.Monad.Reader
@@ -20,7 +21,13 @@ import Lib.Eval
 import Lib.Meta
 import Lib.Syntax
 import Lib.Value
-import Lib.Value.Env            qualified as Env
+import Lib.Value.Env            as Env
+
+-- | Unification error
+newtype UnifyError = UnifyError String
+    deriving (Show)
+
+instance Exception UnifyError
 
 
 -- | partial renaming from Γ to Δ
@@ -35,15 +42,15 @@ liftParRen m = do
     local (IntMap.insert l l) m
 
 -- | invert : (Γ : Cxt) → (spine : Sub Δ Γ) → ParRen Γ Δ
-invert :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m) => Spine -> m Renaming
+invert :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m) => Spine -> m Renaming
 invert sp = snd <$> foldrM (\t (d, r) -> do
     force t >>= \case
         VVar x | IntMap.notMember x r ->
             return (d + 1, IntMap.insert x d r)
-        _ -> fail "throw UnifyError") (0, mempty) sp
+        _ -> throw $ UnifyError "") (0, mempty) sp
 
 -- | perform the partial renaming on rhs, while also checking for "m" occurrences.
-rename :: forall r m. (MonadReader r m, HasMetaCtx r, HasEnv r, MonadFail m, MonadIO m)
+rename :: forall r m. (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => MVar -> Val -> ReaderT Renaming m Tm
 rename m = go
   where
@@ -52,10 +59,10 @@ rename m = go
     goSp t (u : sp) = App <$> goSp t sp <*> go u
     go :: Val -> ReaderT Renaming m Tm
     go t = lift (force t) >>= \case
-        VFlex m' sp | m == m'   -> fail "throwIO UnifyError" -- occurs check
+        VFlex m' sp | m == m'   -> throw $ UnifyError "occurs check"
                     | otherwise -> goSp (Meta m') sp
         VRigid x sp -> asks (IntMap.lookup x) >>= \case
-            Nothing -> fail "throwIO UnifyError"  -- scope error ("escaping variable" error)
+            Nothing -> throw $ UnifyError "escaping variable"
             Just x' -> flip goSp sp =<< (Var <$> (lift . lvl2Ix) x')
         VLam x c    -> liftParRen $ Lam x <$> (go =<< (lift . instClos) c)
         VPi x a c   -> liftParRen $ Pi x <$> go a <*> (go =<< (lift . instClos) c)
@@ -65,7 +72,7 @@ rename m = go
 lams :: Lvl -> Tm -> Tm
 lams l t = foldr (\x t' -> Lam ('x' : show (x + 1)) t') t [0..l - 1]
 
-solve :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadFail m, MonadIO m)
+solve :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => MVar -> Spine -> Val -> m ()
 solve m sp rhs = do
     ren <- invert sp
@@ -75,30 +82,30 @@ solve m sp rhs = do
     writeMEntry m (Solved sol)
 
 -- | Unify spines.
-unifySp :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadFail m, MonadIO m)
+unifySp :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => Spine -> Spine -> m ()
 unifySp [] []               = return ()
 unifySp (t : sp) (t' : sp') = unifySp sp sp' >> unify t t'
-unifySp _ _                 = fail "throwIO UnifyError" -- rigid mismatch error
+unifySp _ _                 = throw $ UnifyError ""
 
 -- | Unify values.
-unify :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadFail m, MonadIO m)
+unify :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => Val -> Val -> m ()
 unify t u = do
     t' <- force t
     u' <- force u
     case (t', u') of
         (VLam _ c   , VLam _ c'    ) -> unifyM (instClos c) (instClos c')
-        (_          , VLam _ c'    ) -> unifyM (vApp t' =<< Env.weakVar) (instClos c')
-        (VLam _ c   , _            ) -> unifyM (instClos c) (vApp t' =<< Env.weakVar)
+        (_          , VLam _ c'    ) -> unifyM (vApp t' =<< weakVar) (instClos c')
+        (VLam _ c   , _            ) -> unifyM (instClos c) (vApp t' =<< weakVar)
         (VU         , VU           ) -> return ()
         (VPi _ a c  , VPi _ a' c'  ) -> unify a a' >> unifyM (instClos c) (instClos c')
         (VRigid x sp, VRigid x' sp') | x == x' -> unifySp sp sp'
         (VFlex m sp , VFlex m' sp' ) | m == m' -> unifySp sp sp'
         (VFlex m sp , _            ) -> solve m sp t'
         (_          , VFlex m' sp' ) -> solve m' sp' t'
-        _                            -> fail "throwIO UnifyError"  -- rigid mismatch error
+        _                            -> throwString "throwIO UnifyError"  -- rigid mismatch error
 
-unifyM :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadFail m, MonadIO m)
+unifyM :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => m Val -> m Val -> m ()
 unifyM t u = t >>= \t' -> u >>= \u' -> unify t' u'

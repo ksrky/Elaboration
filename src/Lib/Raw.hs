@@ -1,10 +1,13 @@
-module Lib.Raw (Name, Raw(..)) where
+module Lib.Raw (Name, SrcPos, Raw(..)) where
 
 import GHC.Base
 import GHC.Show
 
 -- | Variable name.
 type Name = String
+
+-- | Source position
+type SrcPos = (Int, Int)
 
 data Raw
     = -- | @x@
@@ -22,5 +25,5 @@ data Raw
     | -- | @_@
       RHole
       -- | @t@ with source position
-    | RSrcPos Int Raw
+    | RSrcPos SrcPos Raw
     deriving (Eq, Show)

@@ -1,16 +1,20 @@
 module Lib.Elab (ElabCtx(..), check, infer) where
 
-import Control.Applicative
+import Control.Exception.Safe
 import Control.Lens.Combinators
+import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Reader
+import Data.Functor
 import GHC.Base
 import GHC.Num
 import Lib.Eval
 import Lib.Meta
 import Lib.Raw
 import Lib.Syntax
+import Lib.Unify
 import Lib.Value
-import Lib.Value.Env            as VE
+import Lib.Value.Env
 
 -- | types of every variable in scope
 type Bounds = [(Name, VTy)]
@@ -20,7 +24,7 @@ data ElabCtx = ElabCtx {
     _env     :: Env,
     _metaCtx :: MetaCtx,
     _bounds  :: Bounds,
-    _srcPos  :: Int
+    _srcPos  :: SrcPos
     }
 
 -- ** Lenses
@@ -34,16 +38,16 @@ instance HasMetaCtx ElabCtx where
 bounds :: Lens' ElabCtx Bounds
 bounds = lens _bounds (\ctx bs -> ctx{_bounds = bs})
 
-srcPos :: Lens' ElabCtx Int
+srcPos :: Lens' ElabCtx SrcPos
 srcPos = lens _srcPos (\ctx pos -> ctx{_srcPos = pos})
 
 -- | Elaboration monad
 type ElabM = ReaderT ElabCtx
 
-lookupBounds :: MonadFail m => Name -> ElabM m (Tm, VTy)
+lookupBounds :: MonadThrow m => Name -> ElabM m (Tm, VTy)
 lookupBounds x = go 0 =<< view bounds
   where
-    go _ [] = fail "variable out of scope"
+    go _ [] = throwString  "variable out of scope"
     go i ((x', a) : tys)
         | x == x' = return (Var i, a)
         | otherwise = go (i + 1) tys
@@ -59,15 +63,16 @@ freshMeta = do
     m <- newMVar
     return $ IMeta m []
 
-eval' :: (MonadFail m, MonadIO m) => Tm -> ElabM m Val
+eval' :: (MonadThrow m, MonadIO m) => Tm -> ElabM m Val
 eval' t = do
     env <- view envL
     eval env t
 
-unifyCatch :: Val -> Val -> ElabM m ()
-unifyCatch _t _t' = undefined -- TODO: unify t t' `catch` \(_ :: UnifyError) -> fail "unification failed"
+unifyCatch :: (MonadCatch m, MonadIO m) => Val -> Val -> ElabM m ()
+unifyCatch t t' = unify t t'
+    `catch` \(UnifyError msg) -> throwString msg
 
-unifyFun :: (MonadFail m, MonadIO m) => Val -> ElabM m (Val, Clos)
+unifyFun :: (MonadCatch m, MonadIO m) => Val -> ElabM m (Val, Clos)
 unifyFun (VPi _ a c) = return (a, c)
 unifyFun t = do
     a <- eval' =<< freshMeta
@@ -77,7 +82,7 @@ unifyFun t = do
     return (a, c)
 
 -- | Bidirectional algorithm
-check :: (MonadFail m, MonadIO m) => Raw -> VTy -> ElabM m Tm
+check :: (MonadCatch m, MonadIO m) => Raw -> VTy -> ElabM m Tm
 check (RSrcPos pos t) a = locally srcPos (const pos) $ check t a
 check (RLam x t) (VPi _ a c) =
     bind x a $ Lam x <$> (check t =<< instClos c)
@@ -94,7 +99,7 @@ check t a = do
     unifyCatch a a'
     return t'
 
-infer :: (MonadFail m, MonadIO m) => Raw -> ElabM m (Tm, VTy)
+infer :: (MonadCatch m, MonadIO m) => Raw -> ElabM m (Tm, VTy)
 infer (RSrcPos pos t) = locally srcPos (const pos) $ infer t
 infer (RVar x) = lookupBounds x
 infer RU = return (U, VU)
@@ -103,7 +108,7 @@ infer (RApp t u) = do
     (a', c) <- unifyFun a
     u' <- check u a'
     (App t' u',) <$> ((c @) =<< eval' u')
-infer RLam{} = fail "Can't infer type for lambda expression"
+infer RLam{} = throwString  "Can't infer type for lambda expression"
 infer (RPi x a b) = do
     a' <- check a VU
     va <- eval' a'

@@ -12,7 +12,10 @@ module Lib.Eval (
     ) where
 
 import Control.Applicative
+import Control.Exception.Safe
 import Control.Lens.Combinators
+import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Data.Function
 import Data.Functor
@@ -25,7 +28,7 @@ import Lib.Value
 import Lib.Value.Env            as Env
 
 -- | Evaluation
-eval' :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+eval' :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Tm -> ReaderT Env m Val
 eval' (Var i) = Env.lookupVal i
 eval' (App t u) = do
@@ -41,29 +44,29 @@ eval' (Pi x a b) = VPi x <$> eval' a <*> mkClos b
 eval' (Meta m) = vMeta m
 eval' (IMeta m ns) = vMeta m >>= flip vAppNameds ns
 
-eval :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+eval :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Env -> Tm -> m Val
 eval env t = runReaderT (eval' t) env
 
 infixl 8 @
 
 -- | Closure application
-(@) :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+(@) :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Clos -> Val -> m Val
 Clos env t @ v = runReaderT (extendDefined v $ eval' t) env
 
-instClos :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+instClos :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Clos -> m Val
 instClos (Clos env t) = runReaderT (extendBound $ eval' t) env
 
-vApp :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+vApp :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> Val -> m Val
 vApp (VLam _ c) u    = c @ u
 vApp (VFlex m sp) u  = return $ VFlex m (u : sp)
 vApp (VRigid x sp) u = return $ VRigid x (u : sp)
-vApp _ _             = fail "vApp: impossible"
+vApp _ _             = throwString "vApp: impossible"
 
-vAppSp :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+vAppSp :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> Spine -> m Val
 vAppSp t []       = return t
 vAppSp t (u : sp) = t `vAppSp` sp >>= flip vApp u
@@ -74,7 +77,7 @@ vMeta m = readMEntry m <&> (\case
     Unsolved -> VMeta m)
 
 -- | We apply a value to a mask of entries from the environment.
-vAppNameds :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+vAppNameds :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> [Named] -> ReaderT Env m Val
 vAppNameds v ns = do
     env <- view envL
@@ -93,7 +96,7 @@ lvl2Ix x = do
     return $ l - x - 1
 
 -- | force
-force :: (MonadReader r m, HasMetaCtx r, MonadFail m, MonadIO m)
+force :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Val
 force t@(VFlex m sp) = do
     readMEntry m >>= \case
@@ -102,11 +105,11 @@ force t@(VFlex m sp) = do
 force t = return t
 
 -- | Normalization by evaulation
-quote :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadFail m, MonadIO m)
+quote :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Tm
 quote = quote' <=< force
 
-quote' :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadFail m, MonadIO m)
+quote' :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Tm
 quote' (VFlex m sp)  = quoteSp (Meta m) sp
 quote' (VRigid x sp) = Var <$> lvl2Ix x >>= flip quoteSp sp
@@ -114,12 +117,12 @@ quote' (VLam x c)    = Lam x <$> (quote =<< instClos c)
 quote' (VPi x a c)   = Pi x <$> quote a <*> (quote =<< instClos c)
 quote' VU            = return U
 
-quoteSp :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadFail m, MonadIO m)
+quoteSp :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Tm -> Spine -> m Tm
 quoteSp t []       = return t
 quoteSp t (u : sp) = App <$> quoteSp t sp <*> quote u
 
 -- | Normalization by evaulation
-nf :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadFail m, MonadIO m)
+nf :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Env -> Tm -> m Tm
 nf env t = quote =<< eval env t
