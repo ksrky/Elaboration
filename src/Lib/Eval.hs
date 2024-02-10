@@ -2,6 +2,7 @@ module Lib.Eval (
     eval,
     (@),
     instClos,
+    closeVal,
     vApp,
     vAppSp,
     lvl2Ix,
@@ -26,21 +27,22 @@ import Lib.Meta
 import Lib.Syntax
 import Lib.Value
 import Lib.Value.Env            as Env
+import Lib.Common
 
 -- | Evaluation
 eval' :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Tm -> ReaderT Env m Val
 eval' (Var i) = Env.lookupVal i
-eval' (App t u) = do
+eval' (App t u i) = do
     t' <- eval' t
     u' <- eval' u
-    lift $ vApp t' u'
-eval' (Lam x t) = VLam x <$> mkClos t
+    lift $ t' `vApp` (u', i)
+eval' (Lam x i t) = VLam x i <$> mkClos t
 eval' (Let _ _ t u) = do
     t' <- eval' t
     extendDefined t' (eval' u)
 eval' U = return VU
-eval' (Pi x a b) = VPi x <$> eval' a <*> mkClos b
+eval' (Pi x i a b) = VPi x i <$> eval' a <*> mkClos b
 eval' (Meta m) = vMeta m
 eval' (IMeta m ns) = vMeta m >>= flip vAppNameds ns
 
@@ -59,12 +61,16 @@ instClos :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Clos -> m Val
 instClos (Clos env t) = runReaderT (extendBound $ eval' t) env
 
+closeVal :: (MonadReader r f, HasEnv r, HasMetaCtx r, MonadThrow f,  MonadIO f)
+    => Env -> Val -> f Clos
+closeVal env t = Clos env <$> quote t
+
 vApp :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
-    => Val -> Val -> m Val
-vApp (VLam _ c) u    = c @ u
-vApp (VFlex m sp) u  = return $ VFlex m (u : sp)
-vApp (VRigid x sp) u = return $ VRigid x (u : sp)
-vApp _ _             = throwString "vApp: impossible"
+    => Val -> (Val, Icit) -> m Val
+vApp (VLam _ _ c) (u, _) = c @ u
+vApp (VFlex m sp) u      = return $ VFlex m (sp :> u)
+vApp (VRigid x sp) u     = return $ VRigid x (sp :> u)
+vApp _ _                 = throwString "vApp: impossible"
 
 vAppSp :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> Spine -> m Val
@@ -84,7 +90,7 @@ vAppNameds v ns = do
     case (env, ns) of
         (ENil, []) -> return v
         (ECons t env' , Bound : ns') ->
-            Env.set env' $ v `vAppNameds` ns' >>= lift . flip vApp (fst t)
+            Env.set env' $ v `vAppNameds` ns' >>= lift . flip vApp (fst t, Expl)
         (ECons _ env' , Defined : ns') ->
             Env.set env' $ v `vAppNameds` ns'
         _ -> error "impossible"
@@ -100,7 +106,7 @@ force :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Val
 force t@(VFlex m sp) = do
     readMEntry m >>= \case
-        Solved t' -> force =<< vAppSp t' sp
+        Solved t' -> force =<< t' `vAppSp` sp
         Unsolved -> return t
 force t = return t
 
@@ -113,14 +119,14 @@ quote' :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Tm
 quote' (VFlex m sp)  = quoteSp (Meta m) sp
 quote' (VRigid x sp) = Var <$> lvl2Ix x >>= flip quoteSp sp
-quote' (VLam x c)    = Lam x <$> (quote =<< instClos c)
-quote' (VPi x a c)   = Pi x <$> quote a <*> (quote =<< instClos c)
+quote' (VLam x i c)  = Lam x i <$> (quote =<< instClos c)
+quote' (VPi x i a c) = Pi x i <$> quote a <*> (quote =<< instClos c)
 quote' VU            = return U
 
 quoteSp :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Tm -> Spine -> m Tm
-quoteSp t []        = return t
-quoteSp t (sp :> u) = App <$> quoteSp t sp <*> quote u
+quoteSp t []             = return t
+quoteSp t (sp :> (u, i)) = App <$> quoteSp t sp <*> quote u <*> pure i
 
 -- | Normalization by evaulation
 nf :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)

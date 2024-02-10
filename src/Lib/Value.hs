@@ -17,8 +17,8 @@ module Lib.Value (
 import                Control.Lens.Combinators
 import                Data.Vector              (Vector)
 import                Data.Vector              qualified as Vector
+import                Lib.Common
 import {-# SOURCE #-} Lib.Meta
-import                Lib.Raw
 import                Lib.Syntax
 import                Prelude                  hiding (length)
 
@@ -45,9 +45,9 @@ instance HasEnv Env where
     envL = id
 
 -- | Spine
-type Spine   = [Val]
+type Spine   = [(Val, Icit)]
 
-pattern (:>) :: Spine -> Val -> Spine
+pattern (:>) :: Spine -> (Val, Icit) -> Spine
 pattern xs :> x = x : xs
 {-# COMPLETE (:>), [] #-}
 
@@ -66,8 +66,8 @@ data Val
       -- | A rigid neutral value is a bound variable applied to zero or
       -- more arguments
     | VRigid Lvl Spine
-    | VLam Name Clos
-    | VPi Name VTy Clos
+    | VLam Name Icit Clos
+    | VPi Name Icit VTy Clos
     | VU
     deriving (Eq, Show)
 

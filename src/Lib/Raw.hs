@@ -1,10 +1,14 @@
-module Lib.Raw (Name, SrcPos, Raw(..)) where
+{-# LANGUAGE DataKinds #-}
 
+module Lib.Raw (ArgInfo, SrcPos, Raw(..)) where
+
+import Data.Either
 import GHC.Base
 import GHC.Show
+import Lib.Common
 
--- | Variable name.
-type Name = String
+-- | Argument information
+type ArgInfo = Either Name Icit
 
 -- | Source position
 type SrcPos = (Int, Int)
@@ -12,14 +16,14 @@ type SrcPos = (Int, Int)
 data Raw
     = -- | @x@
       RVar Name
-    | -- | @λx → t@
-      RLam Name Raw
-    | -- | @t u@
-      RApp Raw Raw
+    | -- | @λx → t@ | @λ{x} → t@ | @λ{l = x} → t@
+      RLam Name ArgInfo Raw
+    | -- | @t u@ | @t {u}@ | @t {x = u}@
+      RApp Raw Raw ArgInfo
     | -- | @U@
       RU
-    | -- | @(x : a) → b@
-      RPi Name Raw Raw
+    | -- | @(x : a) → b@ | @{x : a} → b@ | @{l = x : a} → b@
+      RPi Name Icit Raw Raw
     | -- | @let x : a = t in u@
       RLet Name Raw Raw Raw
     | -- | @_@

@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Lib.Common
       Lib.Elab
       Lib.Eval
       Lib.Meta
