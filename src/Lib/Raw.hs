@@ -1,13 +1,16 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies    #-}
 
-module Lib.Raw (ArgInfo, SrcPos, Raw(..)) where
+module Lib.Raw (ArgInfo, SrcPos, Raw(..), stripSrcPos) where
 
 import Data.Either
 import Data.Eq
+import Data.Function
+import Data.Functor.Foldable
+import Data.Functor.Foldable.TH
 import Data.Int
 import GHC.Show
 import Lib.Common
-
 -- | Argument information
 type ArgInfo = Either Name Icit
 
@@ -32,3 +35,10 @@ data Raw
       -- | @t@ with source position
     | RSrcPos SrcPos Raw
     deriving (Eq, Show)
+
+makeBaseFunctor ''Raw
+
+stripSrcPos :: Raw -> Raw
+stripSrcPos = cata $ \case
+    RSrcPosF _ r -> r
+    t            -> embed t

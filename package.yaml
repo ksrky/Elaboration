@@ -46,10 +46,11 @@ library:
   source-dirs: src
   dependencies:
     - containers
-    - safe-exceptions
     - lens
     - megaparsec
     - mtl
+    - recursion-schemes
+    - safe-exceptions
     - text
     - vector
 
@@ -63,3 +64,5 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - Elaboration
+      - hspec
+      - text
