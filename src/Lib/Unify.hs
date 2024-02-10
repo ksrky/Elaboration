@@ -55,8 +55,8 @@ rename :: forall r m. (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, Mo
 rename m = go
   where
     goSp :: Tm -> Spine -> ReaderT Renaming m Tm
-    goSp t []       = return t
-    goSp t (u : sp) = App <$> goSp t sp <*> go u
+    goSp t []        = return t
+    goSp t (sp :> u) = App <$> goSp t sp <*> go u
     go :: Val -> ReaderT Renaming m Tm
     go t = lift (force t) >>= \case
         VFlex m' sp | m == m'   -> throw $ UnifyError "occurs check"
@@ -84,9 +84,9 @@ solve m sp rhs = do
 -- | Unify spines.
 unifySp :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
     => Spine -> Spine -> m ()
-unifySp [] []               = return ()
-unifySp (t : sp) (t' : sp') = unifySp sp sp' >> unify t t'
-unifySp _ _                 = throw $ UnifyError ""
+unifySp [] []                 = return ()
+unifySp (sp :> t) (sp' :> t') = unifySp sp sp' >> unify t t'
+unifySp _ _                   = throw $ UnifyError ""
 
 -- | Unify values.
 unify :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)

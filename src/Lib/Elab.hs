@@ -33,7 +33,7 @@ instance HasEnv ElabCtx where
     envL = lens _env (\ctx env -> ctx{_env = env})
 
 instance HasMetaCtx ElabCtx where
-    metaCtx = lens _metaCtx (\ctx mc -> ctx{_metaCtx = mc})
+    metaCtxL = lens _metaCtx (\ctx mc -> ctx{_metaCtx = mc})
 
 bounds :: Lens' ElabCtx Bounds
 bounds = lens _bounds (\ctx bs -> ctx{_bounds = bs})

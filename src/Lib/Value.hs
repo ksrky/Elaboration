@@ -7,6 +7,7 @@ module Lib.Value (
     pattern ECons,
     HasEnv(..),
     Spine,
+    pattern (:>),
     Clos(..),
     VTy,
     Val(..),
@@ -45,6 +46,10 @@ instance HasEnv Env where
 
 -- | Spine
 type Spine   = [Val]
+
+pattern (:>) :: Spine -> Val -> Spine
+pattern xs :> x = x : xs
+{-# COMPLETE (:>), [] #-}
 
 -- | Closure
 data Clos = Clos Env Tm

@@ -68,8 +68,8 @@ vApp _ _             = throwString "vApp: impossible"
 
 vAppSp :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> Spine -> m Val
-vAppSp t []       = return t
-vAppSp t (u : sp) = t `vAppSp` sp >>= flip vApp u
+vAppSp t []        = return t
+vAppSp t (sp :> u) = t `vAppSp` sp >>= flip vApp u
 
 vMeta :: (MonadIO m) => MVar -> m Val
 vMeta m = readMEntry m <&> (\case
@@ -119,8 +119,8 @@ quote' VU            = return U
 
 quoteSp :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Tm -> Spine -> m Tm
-quoteSp t []       = return t
-quoteSp t (u : sp) = App <$> quoteSp t sp <*> quote u
+quoteSp t []        = return t
+quoteSp t (sp :> u) = App <$> quoteSp t sp <*> quote u
 
 -- | Normalization by evaulation
 nf :: (MonadReader r m, HasEnv r, HasMetaCtx r, MonadThrow m, MonadIO m)

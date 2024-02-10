@@ -1,8 +1,5 @@
-{-# LANGUAGE TemplateHaskell #-}
-
 module Lib.Meta (
     MEntry(..),
-    mid,
     mentry,
     MVar(..),
     MetaCtx,
@@ -33,11 +30,18 @@ data MVar = MVar {_mid :: Int, _mentry :: IORef MEntry}
 instance Show MVar where
     show (MVar i _) = "?" ++ show i
 
-makeLenses ''MVar
+mentry :: Lens' MVar (IORef MEntry)
+mentry = lens _mentry (\m e -> m{_mentry = e})
 
 newtype MetaCtx = MetaCtx {_mnext :: IORef Int}
 
-makeClassy ''MetaCtx
+class HasMetaCtx a where
+    metaCtxL :: Lens' a MetaCtx
+    mnext :: Lens' a (IORef Int)
+    mnext = metaCtxL . go where go f (MetaCtx x) = MetaCtx <$> f x
+
+instance HasMetaCtx MetaCtx where
+    metaCtxL = id
 
 newMVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => m MVar
 newMVar = do
