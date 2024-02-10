@@ -1,7 +1,8 @@
 module Lib.Meta (MEntry, MVar) where
 
+import Data.Eq
+import Data.Int
 import Data.IORef
-import GHC.Base
 import GHC.Show
 
 data MEntry

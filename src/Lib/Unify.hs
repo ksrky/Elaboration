@@ -7,14 +7,16 @@ import Control.Exception.Safe
 import Control.Lens.Combinators
 import Control.Monad
 import Control.Monad.Reader
+import Data.Bool
+import Data.Eq
 import Data.Foldable
 import Data.Function
 import Data.IntMap              (IntMap)
 import Data.IntMap              qualified as IntMap
 import Data.Maybe
 import Data.Monoid
+import Data.String
 import Data.Tuple
-import GHC.Base                 hiding (foldr)
 import GHC.List                 qualified as List
 import GHC.Num
 import GHC.Show
@@ -79,7 +81,7 @@ solve :: (MonadReader r m, HasMetaCtx r, HasEnv r, MonadThrow m, MonadIO m)
 solve m sp rhs = do
     ren <- invert sp
     rhs' <- runReaderT (rename m rhs) ren
-    sol <- eval Env.empty $ lams (List.reverse $ map snd sp) rhs'
+    sol <- eval Env.empty $ lams (List.reverse $ List.map snd sp) rhs'
     writeMEntry m (Solved sol)
 
 -- | Unify spines.

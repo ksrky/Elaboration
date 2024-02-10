@@ -13,8 +13,11 @@ import Control.Lens.Combinators
 import Control.Lens.Operators
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
+import Data.Eq
+import Data.Function
+import Data.Int
 import Data.IORef
-import GHC.Base
+import Data.List                  ((++))
 import GHC.Num
 import GHC.Show
 import Lib.Value

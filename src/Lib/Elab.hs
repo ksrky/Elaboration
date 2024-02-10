@@ -5,9 +5,11 @@ import Control.Lens.Combinators
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
+import Data.Bool
 import Data.Either
+import Data.Eq
+import Data.Function
 import Data.Functor
-import GHC.Base
 import GHC.Num
 import GHC.Show
 import Lib.Common
@@ -168,14 +170,14 @@ infer (RPi x i a b) = do
     a' <- check a VU
     va <- eval' a'
     b' <- bind x va $ check b VU
-    pure (Pi x i a' b', VU)
+    return (Pi x i a' b', VU)
 infer (RLet x a t u) = do
     a' <- check a VU
     va <- eval' a'
     t' <- check t va
     vt <- eval' t'
     (u', uty) <- define x vt va $ infer u
-    pure (Let x a' t' u', uty)
+    return (Let x a' t' u', uty)
 infer RHole = do
     a <- eval' =<< freshMeta
     t <- freshMeta

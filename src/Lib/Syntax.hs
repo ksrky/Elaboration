@@ -1,6 +1,8 @@
 module Lib.Syntax (Ix, Lvl, Named(..), Ty, Tm(..)) where
 
-import                GHC.Base
+
+import                Data.Eq
+import                Data.Int
 import                GHC.Show
 import                Lib.Common
 import {-# SOURCE #-} Lib.Meta

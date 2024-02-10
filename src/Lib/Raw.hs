@@ -3,7 +3,8 @@
 module Lib.Raw (ArgInfo, SrcPos, Raw(..)) where
 
 import Data.Either
-import GHC.Base
+import Data.Eq
+import Data.Int
 import GHC.Show
 import Lib.Common
 

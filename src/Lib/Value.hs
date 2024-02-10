@@ -15,12 +15,17 @@ module Lib.Value (
     pattern VMeta) where
 
 import                Control.Lens.Combinators
+import                Data.Eq
+import                Data.Function
+import                Data.Maybe
+import                Data.Monoid
+import                Data.Semigroup
 import                Data.Vector              (Vector)
 import                Data.Vector              qualified as Vector
+import                GHC.Show
 import                Lib.Common
 import {-# SOURCE #-} Lib.Meta
 import                Lib.Syntax
-import                Prelude                  hiding (length)
 
 
 -- | Value environment

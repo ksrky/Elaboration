@@ -15,11 +15,15 @@ module Lib.Value.Env (
     ) where
 
 import Control.Lens.Combinators   hiding (cons, set)
+import Control.Monad
 import Control.Monad.Reader.Class
+import Data.Function
+import Data.Functor
+import Data.Int
+import Data.Tuple
 import Data.Vector                qualified as Vector
 import Lib.Syntax
 import Lib.Value
-import Prelude                    hiding (length, lookup)
 
 -- * Basic operations
 

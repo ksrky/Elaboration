@@ -21,13 +21,13 @@ import Control.Monad.Reader
 import Data.Function
 import Data.Functor
 import Data.Tuple
-import GHC.Base
+import GHC.Err
 import GHC.Num
+import Lib.Common
 import Lib.Meta
 import Lib.Syntax
 import Lib.Value
 import Lib.Value.Env            as Env
-import Lib.Common
 
 -- | Evaluation
 eval' :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
