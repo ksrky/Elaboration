@@ -19,7 +19,7 @@ import Lib.Raw
 import Lib.Syntax
 import Lib.Unify
 import Lib.Value
-import Lib.Value.Env
+import Lib.Value.Env            as Env
 
 data Origin = Inserted | Source
     deriving (Eq, Show)
@@ -32,6 +32,7 @@ data ElabCtx = ElabCtx {
     _env     :: Env,
     _metaCtx :: MetaCtx,
     _bounds  :: Bounds,
+    _pruning :: Prun,
     _srcPos  :: SrcPos
     }
 
@@ -45,6 +46,9 @@ instance HasMetaCtx ElabCtx where
 
 bounds :: Lens' ElabCtx Bounds
 bounds = lens _bounds (\ctx bs -> ctx{_bounds = bs})
+
+pruning :: Lens' ElabCtx Prun
+pruning = lens _pruning (\ctx pr -> ctx{_pruning = pr})
 
 srcPos :: Lens' ElabCtx SrcPos
 srcPos = lens _srcPos (\ctx pos -> ctx{_srcPos = pos})
@@ -69,10 +73,11 @@ ibind x a = extendBound . locally bounds ((x, Inserted, a):)
 define :: Monad m => Name -> Val -> VTy -> ElabM m a -> ElabM m a
 define x t a = extendDefined t . locally bounds ((x, Source, a):)
 
-freshMeta :: (MonadReader r m, HasMetaCtx r, MonadIO m) => m Tm
-freshMeta = do
-    m <- newMVar
-    return $ IMeta m []
+freshMeta :: MonadIO m => VTy -> ElabM m Tm
+freshMeta a = do
+    closed <- eval Env.empty =<< closeTy =<< quote a
+    m <- newMVar closed
+    AppPrun (Meta m) <$> view pruning
 
 eval' :: (MonadThrow m, MonadIO m) => Tm -> ElabM m Val
 eval' t = do

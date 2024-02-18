@@ -23,7 +23,7 @@ import GHC.Show
 import Lib.Value
 
 -- | Meta entry.
-data MEntry = Solved Val | Unsolved
+data MEntry = Solved Val VTy | Unsolved VTy
     deriving (Eq, Show)
 
 -- | Meta variable.
@@ -46,12 +46,13 @@ class HasMetaCtx a where
 instance HasMetaCtx MetaCtx where
     metaCtxL = id
 
-newMVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => m MVar
-newMVar = do
+newMVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => VTy -> m MVar
+newMVar a = do
     mn <- view mnext
-    i <- liftIO $ readIORef mn
-    liftIO $ writeIORef mn (i + 1)
-    liftIO $ MVar i <$> newIORef Unsolved
+    liftIO $ do
+        i <- readIORef mn
+        writeIORef mn (i + 1)
+        MVar i <$> newIORef (Unsolved a)
 
 readMEntry :: MonadIO m => MVar -> m MEntry
 readMEntry = liftIO . readIORef . view mentry

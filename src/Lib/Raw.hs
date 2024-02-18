@@ -11,6 +11,7 @@ import Data.Functor.Foldable.TH
 import Data.Int
 import GHC.Show
 import Lib.Common
+
 -- | Argument information
 type ArgInfo = Either Name Icit
 

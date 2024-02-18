@@ -20,6 +20,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Data.Function
 import Data.Functor
+import Data.Maybe
 import Data.Tuple
 import GHC.Err
 import GHC.Num
@@ -37,6 +38,7 @@ eval' (App t u i) = do
     t' <- eval' t
     u' <- eval' u
     lift $ t' `vApp` (u', i)
+eval' (AppPrun t pr) = (`vAppPrun` pr) =<< eval' t
 eval' (Lam x i t) = VLam x i <$> mkClos t
 eval' (Let _ _ t u) = do
     t' <- eval' t
@@ -44,7 +46,6 @@ eval' (Let _ _ t u) = do
 eval' U = return VU
 eval' (Pi x i a b) = VPi x i <$> eval' a <*> mkClos b
 eval' (Meta m) = vMeta m
-eval' (IMeta m ns) = vMeta m >>= flip vAppNameds ns
 
 eval :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Env -> Tm -> m Val
@@ -79,20 +80,19 @@ vAppSp t (sp :> u) = t `vAppSp` sp >>= flip vApp u
 
 vMeta :: (MonadIO m) => MVar -> m Val
 vMeta m = readMEntry m <&> (\case
-    Solved v -> v
-    Unsolved -> VMeta m)
+    Solved v _ -> v
+    Unsolved _ -> VMeta m)
 
 -- | We apply a value to a mask of entries from the environment.
-vAppNameds :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
-    => Val -> [Named] -> ReaderT Env m Val
-vAppNameds v ns = do
+vAppPrun :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
+    => Val -> Prun -> ReaderT Env m Val
+vAppPrun v pr = do
     env <- view envL
-    case (env, ns) of
+    case (env, pr) of
         (ENil, []) -> return v
-        (ECons t env' , Bound : ns') ->
-            Env.set env' $ v `vAppNameds` ns' >>= lift . flip vApp (fst t, Expl)
-        (ECons _ env' , Defined : ns') ->
-            Env.set env' $ v `vAppNameds` ns'
+        (ECons t env' , Just i : pr') ->
+            Env.set env' $ v `vAppPrun` pr' >>= lift . (`vApp` (fst t, i))
+        (ECons _ env' , Nothing : pr') -> Env.set env' $ v `vAppPrun` pr'
         _ -> error "impossible"
 
 -- | Convert De Bruijn level to index
@@ -106,8 +106,8 @@ force :: (MonadReader r m, HasMetaCtx r, MonadThrow m, MonadIO m)
     => Val -> m Val
 force t@(VFlex m sp) = do
     readMEntry m >>= \case
-        Solved t' -> force =<< t' `vAppSp` sp
-        Unsolved -> return t
+        Solved t' _ -> force =<< t' `vAppSp` sp
+        Unsolved _  -> return t
 force t = return t
 
 -- | Normalization by evaulation
