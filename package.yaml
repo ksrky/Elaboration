@@ -29,6 +29,7 @@ dependencies:
   - mtl
   - prettyprinter
   - recursion-schemes
+  - safe-exceptions
   - text
 
 ghc-options:
@@ -74,3 +75,4 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - Elaboration
+      - hspec

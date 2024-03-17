@@ -17,7 +17,7 @@ import           Value.Env                as Env
 type Bounds = [(Name, VTy)]
 
 -- | Elaboration context.
-data ElabCtx = ElabCtx {_env :: Env, _bounds :: Bounds, _srcPos :: Int}
+data ElabCtx = ElabCtx {_env :: Env, _bounds :: Bounds, _srcPos :: Raw.SrcPos}
 
 makeClassy ''ElabCtx
 
