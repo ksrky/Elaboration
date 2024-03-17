@@ -71,6 +71,7 @@ test-suite Elaboration-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      EvalSpec
       ParserSpec
       Paths_Elaboration
   autogen-modules:

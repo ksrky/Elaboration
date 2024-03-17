@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Elab (ElabCtx(..), check) where
+module Elab (ElabCtx(..), check, infer) where
 
 import           Common
 import           Control.Lens.Combinators
@@ -52,9 +52,9 @@ check (Raw.Lam x t) (VPi _ a c) = do
     bind x a $ Lam x <$> check t (c |@ VVar l)
 check (Raw.Let x a t u) b = do
     a' <- check a VU
-    va <- views env (`eval` a')
+    va <- views env (`evalTerm` a')
     t' <- check t va
-    vt <- views env (`eval` t')
+    vt <- views env (`evalTerm` t')
     u' <- define x vt va $ check u b
     return $ Let x a' t' u'
 check t a = do
@@ -72,19 +72,19 @@ infer (Raw.App t u) = do
     case tty of
         VPi _ a c -> do
             u' <- check u a
-            vu <- views env (`eval` u')
+            vu <- views env (`evalTerm` u')
             return (App t' u', c |@ vu)
         _ -> fail "Expected a function type, instead inferred"
 infer Raw.Lam{} = fail "Can't infer type for lambda expression"
 infer (Raw.Pi x a b) = do
     a' <- check a VU
-    va <- views env (`eval` a')
+    va <- views env (`evalTerm` a')
     b' <- bind x va $ check b VU
     return (Pi x a' b', VU)
 infer (Raw.Let x a t u) = do
     a' <- check a VU
-    va <- views env (`eval` a')
+    va <- views env (`evalTerm` a')
     t' <- check t va
-    vt <- views env (`eval` t')
+    vt <- views env (`evalTerm` t')
     (u', uty) <- define x vt va $ infer u
     return (Let x a' t' u', uty)

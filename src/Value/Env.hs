@@ -1,8 +1,17 @@
-module Value.Env (level, append, increment, lookup) where
+module Value.Env (
+    empty,
+    level,
+    append,
+    increment,
+    lookup
+    ) where
 
 import qualified Data.Vector as Vector
 import           Prelude     hiding (length, lookup)
 import           Value
+
+empty :: Env
+empty = Env Vector.empty
 
 level :: Env -> Int
 level (Env env) = Vector.length env

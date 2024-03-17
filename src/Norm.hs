@@ -19,7 +19,7 @@ quote l (VPi x a c) = Pi x (quote l a) (quote (l + 1) (c |@ VVar l))
 
 -- | Normalization by evaulation
 nf :: Env -> Term -> Term
-nf env t = quote (Env.level env) (eval env t)
+nf env t = quote (Env.level env) (evalTerm env t)
 
 -- | Beta-eta conversion checking. Precondition: both values have the same type.
 conv :: MonadFail m => Lvl -> Val -> Val -> m ()
