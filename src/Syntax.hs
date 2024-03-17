@@ -1,6 +1,9 @@
-module Syntax (Ix, Lvl, Ty, Tm(..)) where
+{-# LANGUAGE TemplateHaskell #-}
 
-import Raw
+module Syntax (Ix, Lvl, Type, Term(..), TermF(..)) where
+
+import           Common
+import           Data.Functor.Foldable.TH
 
 -- | De Bruijn index.
 type Ix = Int
@@ -9,15 +12,17 @@ type Ix = Int
 type Lvl = Int
 
 -- | Types.
-type Ty = Tm
+type Type = Term
 
 -- | Terms. @Tm n@ means that the term is well-scoped
 -- under the environment of length @n@
-data Tm
+data Term
     = Var Ix
-    | App Tm Tm
-    | Lam Name Tm
-    | Let Name Ty Tm Tm
+    | App Term Term
+    | Lam Name Term
+    | Let Name Type Term Term
+    | Pi Name Type Type
     | U
-    | Pi Name Ty Ty
     deriving (Eq, Show)
+
+makeBaseFunctor ''Term

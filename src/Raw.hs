@@ -1,14 +1,13 @@
-module Raw (Name, Raw(..)) where
+module Raw (Raw(..)) where
 
--- | Variable name.
-type Name = String
+import           Common
 
 data Raw
-    = RVar Name
-    | RLam Name Raw
-    | RApp Raw Raw
-    | RU
-    | RPi Name Raw Raw
-    | RLet Name Raw Raw Raw
-    | RSrcPos Int Raw
+    = Var Name
+    | Lam Name Raw
+    | App Raw Raw
+    | U
+    | Pi Name Raw Raw
+    | Let Name Raw Raw Raw
+    | SrcPos Int Raw
     deriving (Eq, Show)

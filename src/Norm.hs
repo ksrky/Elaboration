@@ -3,48 +3,38 @@ module Norm (quote, nf, conv) where
 import           Eval
 import           Syntax
 import           Value
-import           Value.Env as VE
-import           Control.Monad.Reader
-import           Control.Lens.Combinators
+import           Value.Env as Env
 
 -- | Convert De Bruijn level to index
-lvl2Ix :: (MonadReader e m, HasValEnv e) => Lvl -> m Ix
-lvl2Ix x = do
-    l <- views valEnv VE.length
-    return $ l - x - 1
+lvl2Ix :: Lvl -> Lvl -> Ix
+lvl2Ix l x = l - x - 1
 
 -- | Normalization by evaulation
-quote :: (MonadReader e m, HasValEnv e) => Val -> m Tm
-quote (VVar x)    = Var <$> lvl2Ix x
-quote (VApp t u)  = App <$> quote t <*> quote u
-quote (VLam x c)  = Lam x <$> (quote =<< c <@> weakVar)
-quote VU          = return U
-quote (VPi x a c) = Pi x <$> quote a <*> (quote =<< c <@> weakVar)
+quote :: Lvl -> Val -> Term
+quote l (VVar x)    = Var (lvl2Ix l x)
+quote l (VApp t u)  = App (quote l t) (quote l u)
+quote l (VLam x c)  = Lam x (quote (l + 1) (c |@ VVar l))
+quote _ VU          = U
+quote l (VPi x a c) = Pi x (quote l a) (quote (l + 1) (c |@ VVar l))
 
 -- | Normalization by evaulation
-nf :: (MonadReader e m, HasValEnv e) => Tm -> m Tm
-nf t = quote =<< eval t
+nf :: Env -> Term -> Term
+nf env t = quote (Env.level env) (eval env t)
 
 -- | Beta-eta conversion checking. Precondition: both values have the same type.
-conv :: (MonadReader e m, HasValEnv e, MonadFail m) => Val -> Val -> m ()
-conv VU VU = return ()
-conv (VPi _ a c) (VPi _ a' c') = do
-    conv a a'
-    b <- c <@> weakVar
-    b' <- c' <@> weakVar
-    conv b b'
-conv (VLam _ c) (VLam _ c') = do
-    t <- c <@> weakVar
-    t' <- c' <@> weakVar
-    conv t t'
-conv (VLam _ c) u = do
-    t <- c <@> weakVar
-    u' <- VApp u <$> weakVar
-    conv t u'
-conv t (VLam _ c) = do
-    t' <- VApp t <$> weakVar
-    u <- c <@> weakVar
-    conv t' u
-conv (VVar x) (VVar x') | x == x' = return ()
-conv (VApp t u) (VApp t' u') = conv t t' >> conv u u'
-conv _ _ = fail "conv fail"
+conv :: MonadFail m => Lvl -> Val -> Val -> m ()
+conv _ VU VU = return ()
+conv l (VPi _ a c) (VPi _ a' c') = do
+    conv l a a'
+    conv (l + 1) (c |@ VVar l) (c' |@ VVar l)
+conv l (VLam _ c) (VLam _ c') =
+    conv (l + 1) (c |@ VVar l) (c' |@ VVar l)
+conv l (VLam _ c) u = do
+    conv (l + 1) (c |@ VVar l) (VApp u (VVar l))
+conv l t (VLam _ c) =
+    conv (l + 1) (VApp t (VVar l)) (c |@ VVar l)
+conv _ (VVar x) (VVar x') | x == x' = return ()
+conv l (VApp t u) (VApp t' u') = do
+    conv l t t'
+    conv l u u'
+conv _ _ _ = fail "conv fail"

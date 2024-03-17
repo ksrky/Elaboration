@@ -1,83 +1,90 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Elab (ElabCtx(..), check) where
 
-import Syntax
-import Value
-import Value.Env as VE
-import Raw
-import Control.Monad.Reader
-import Control.Lens.Combinators
-import Eval
-import Norm 
+import           Common
+import           Control.Lens.Combinators
+import           Control.Lens.Operators
+import           Control.Monad.Reader
+import           Eval
+import           Norm
+import qualified Raw
+import           Syntax
+import           Value
+import           Value.Env                as Env
 
 -- type of every variable in scope
-type Types = [(Name, VTy)]
+type Bounds = [(Name, VTy)]
 
 -- | Elaboration context.
-data ElabCtx = ElabCtx {_valEnv :: ValEnv, _types :: Types, _srcPos :: Int}
+data ElabCtx = ElabCtx {_env :: Env, _bounds :: Bounds, _srcPos :: Int}
 
-instance HasValEnv ElabCtx where
-    valEnv = lens _valEnv (\ctx ve -> ctx{_valEnv = ve})
-
-types :: Lens' ElabCtx Types
-types = lens _types (\ctx ts -> ctx{_types = ts})
-
-srcPos :: Lens' ElabCtx Int
-srcPos = lens _srcPos (\ctx pos -> ctx{_srcPos = pos})
+makeClassy ''ElabCtx
 
 type ElabM = ReaderT ElabCtx
 
-lookupTypes :: MonadFail m => Name -> ElabM m (Tm, VTy)
-lookupTypes x = go 0 =<< view types
+lookupBounds :: MonadFail m => Name -> ElabM m (Term, VTy)
+lookupBounds x = go 0 =<< view bounds
   where
     go _ [] = fail "variable out of scope"
     go i ((x', a) : tys)
         | x == x' = return (Var i, a)
         | otherwise = go (i + 1) tys
 
-decl :: Monad m => Name -> VTy -> ElabM m a -> ElabM m a
-decl x a = extEnvWeakVar . locally types ((x, a):)
+bind :: Monad m => Name -> VTy -> ElabM m a -> ElabM m a
+bind x a =
+    local (\ctx -> ctx
+        & env %~ Env.increment
+        & bounds %~ ((x, a) :))
 
 define :: Monad m => Name -> Val -> VTy -> ElabM m a -> ElabM m a
-define x t a = locally valEnv (VE.cons t) . locally types ((x, a):)
+define x t a =
+    local (\ctx -> ctx
+        & env %~ (`Env.append` t)
+        & bounds %~ ((x, a) :))
+    -- locally valEnv (VE.cons t) . locally types ((x, a):)
 
 -- | Bidirectional algorithm
-check :: MonadFail m => Raw -> VTy -> ElabM m Tm
-check (RSrcPos pos t) a = locally srcPos (const pos) $ check t a
-check (RLam x t) (VPi _ a c) =
-    decl x a $ Lam x <$> (check t =<< (c <@> weakVar))
-check (RLet x a t u) b = do
+check :: MonadFail m => Raw.Raw -> VTy -> ElabM m Term
+check (Raw.SrcPos pos t) a = locally srcPos (const pos) $ check t a
+check (Raw.Lam x t) (VPi _ a c) = do
+    l <- views env Env.level
+    bind x a $ Lam x <$> check t (c |@ VVar l)
+check (Raw.Let x a t u) b = do
     a' <- check a VU
-    va <- eval a'
+    va <- views env (`eval` a')
     t' <- check t va
-    vt <- eval t'
+    vt <- views env (`eval` t')
     u' <- define x vt va $ check u b
     return $ Let x a' t' u'
 check t a = do
     (t', tty) <- infer t
-    conv tty a
-    pure t'
+    l <- views env Env.level
+    conv l tty a
+    return t'
 
-infer :: MonadFail m => Raw -> ElabM m (Tm, VTy)
-infer (RSrcPos pos t) = locally srcPos (const pos) $ infer t
-infer (RVar x) = lookupTypes x
-infer RU = return (U, VU)
-infer (RApp t u) = do
+infer :: MonadFail m => Raw.Raw -> ElabM m (Term, VTy)
+infer (Raw.SrcPos pos t) = locally srcPos (const pos) $ infer t
+infer (Raw.Var x) = lookupBounds x
+infer Raw.U = return (U, VU)
+infer (Raw.App t u) = do
     (t', tty) <- infer t
     case tty of
         VPi _ a c -> do
             u' <- check u a
-            (App t' u',) <$> (c <@> eval u')
+            vu <- views env (`eval` u')
+            return (App t' u', c |@ vu)
         _ -> fail "Expected a function type, instead inferred"
-infer RLam{} = fail "Can't infer type for lambda expression"
-infer (RPi x a b) = do
+infer Raw.Lam{} = fail "Can't infer type for lambda expression"
+infer (Raw.Pi x a b) = do
     a' <- check a VU
-    va <- eval a'
-    b' <- decl x va $ check b VU
-    pure (Pi x a' b', VU)
-infer (RLet x a t u) = do
+    va <- views env (`eval` a')
+    b' <- bind x va $ check b VU
+    return (Pi x a' b', VU)
+infer (Raw.Let x a t u) = do
     a' <- check a VU
-    va <- eval a'
+    va <- views env (`eval` a')
     t' <- check t va
-    vt <- eval t'
+    vt <- views env (`eval` t')
     (u', uty) <- define x vt va $ infer u
-    pure (Let x a' t' u', uty)
+    return (Let x a' t' u', uty)

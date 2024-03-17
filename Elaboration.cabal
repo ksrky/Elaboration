@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Common
       Elab
       Eval
       Norm
@@ -39,6 +40,10 @@ library
   hs-source-dirs:
       src
   default-extensions:
+      ImportQualifiedPost
+      LambdaCase
+      OverloadedStrings
+      TypeFamilies
       DataKinds
       GADTs
       GeneralizedNewtypeDeriving
@@ -50,10 +55,15 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
+    , containers
     , lens
+    , megaparsec
     , mtl
+    , prettyprinter
+    , recursion-schemes
+    , text
     , vector
-  default-language: Haskell2010
+  default-language: GHC2021
 
 test-suite Elaboration-test
   type: exitcode-stdio-1.0
@@ -64,8 +74,20 @@ test-suite Elaboration-test
       Paths_Elaboration
   hs-source-dirs:
       test
+  default-extensions:
+      ImportQualifiedPost
+      LambdaCase
+      OverloadedStrings
+      TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Elaboration
     , base >=4.7 && <5
-  default-language: Haskell2010
+    , containers
+    , lens
+    , megaparsec
+    , mtl
+    , prettyprinter
+    , recursion-schemes
+    , text
+  default-language: GHC2021

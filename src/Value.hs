@@ -1,18 +1,17 @@
-module Value (ValEnv(..), Clos(..), VTy, Val(..), HasValEnv(..)) where
+module Value (Env(..), Closure(..), VTy, Val(..)) where
 
-import           Raw
-import           Syntax
+import           Common
 import           Data.Vector (Vector)
-import           Prelude hiding (length)
-import           Control.Lens.Combinators
+import           Prelude     hiding (length)
+import           Syntax
 
 
 -- | Value environment
-newtype ValEnv = ValEnv (Vector Val)
+newtype Env = Env (Vector Val)
     deriving (Eq, Show, Semigroup, Monoid)
 
 -- | Closure
-data Clos = Clos ValEnv Tm
+data Closure = Closure Env Term
     deriving (Eq, Show)
 
 -- | Value types.
@@ -22,10 +21,7 @@ type VTy = Val
 data Val
     = VVar Lvl
     | VApp Val Val
-    | VLam Name Clos
+    | VLam Name Closure
+    | VPi Name VTy Closure
     | VU
-    | VPi Name VTy Clos
     deriving (Eq, Show)
-
-class HasValEnv a where
-    valEnv :: Lens' a ValEnv

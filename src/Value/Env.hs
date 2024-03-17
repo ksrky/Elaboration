@@ -1,14 +1,17 @@
-module Value.Env (length, cons, (!)) where
+module Value.Env (level, append, increment, lookup) where
 
-import Value
-import Prelude hiding (length)
 import qualified Data.Vector as Vector
+import           Prelude     hiding (length, lookup)
+import           Value
 
-length :: ValEnv -> Int
-length (ValEnv env) = Vector.length env
+level :: Env -> Int
+level (Env env) = Vector.length env
 
-cons :: Val -> ValEnv -> ValEnv
-cons v (ValEnv env) = ValEnv $ v `Vector.cons` env
+append :: Env -> Val -> Env
+append (Env env) val = Env $ env `Vector.snoc` val
 
-(!) ::  ValEnv -> Int -> Val
-ValEnv env ! i = env Vector.! i 
+increment :: Env -> Env
+increment (Env env) = Env $ env `Vector.snoc` VVar (Vector.length env)
+
+lookup :: Int -> Env -> Val
+lookup i (Env env) = env Vector.! i
