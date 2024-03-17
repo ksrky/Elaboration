@@ -28,10 +28,11 @@ library
       Common
       Elab
       Eval
-      Norm
+      Meta
       Parser
       Raw
       Syntax
+      Unify
       Value
       Value.Env
   other-modules:

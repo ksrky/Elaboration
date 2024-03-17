@@ -95,8 +95,11 @@ pLet :: Parser Raw
 pLet = Let <$> (stringL "let" *> pName) <*> (charL ':' *> pRaw)
     <*> (stringL "=" *> pRaw) <*> (stringL "in" *> pRaw) <?> "RLet"
 
+pHole :: Parser Raw
+pHole = stringL "_" *> return Hole <?> "Hole"
+
 pAtom :: Parser Raw
-pAtom = pU <|> pVar <|> parens pRaw
+pAtom = pU <|> pHole <|> pVar <|> parens pRaw
 
 pRaw :: Parser Raw
 pRaw = (lexeme . withSrcPos) (

@@ -1,15 +1,27 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Syntax (Ix, Lvl, Type, Term(..), TermF(..)) where
+module Syntax (
+    Ix,
+    Lvl,
+    EnvSpec(..),
+    Type,
+    Term(..),
+    TermF(..)
+    ) where
 
-import           Common
-import           Data.Functor.Foldable.TH
+import                          Common
+import                          Data.Functor.Foldable.TH
+import {-# SOURCE #-}           Meta
 
 -- | De Bruijn index.
 type Ix = Int
 
 -- | De Bruijn level.
 type Lvl = Int
+
+-- | Bound or Defined
+data EnvSpec = Bound | Defined
+    deriving (Eq, Show)
 
 -- | Types.
 type Type = Term
@@ -23,6 +35,8 @@ data Term
     | Let Name Type Term Term
     | Pi Name Type Type
     | U
+    | Meta MetaVar
+    | InsertedMeta MetaVar [EnvSpec]
     deriving (Eq, Show)
 
 makeBaseFunctor ''Term

@@ -1,6 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Raw (SrcPos, Raw(..), RawF(..), stripSrcPos) where
+module Raw (
+    SrcPos,
+    Raw(..),
+    RawF(..),
+    stripSrcPos
+    ) where
 
 import           Common
 import           Data.Functor.Foldable
@@ -12,9 +17,10 @@ data Raw
     = Var Name
     | Lam Name Raw
     | App Raw Raw
-    | U
     | Pi Name Raw Raw
     | Let Name Raw Raw Raw
+    | U
+    | Hole
     | SrcPos SrcPos Raw
     deriving (Eq, Show)
 
