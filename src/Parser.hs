@@ -51,9 +51,17 @@ withSrcPos parser = SrcPos <$> pSrcPos <*> parser
 pVar :: Parser Raw
 pVar = Var <$> pName <?> "Var"
 
-pLamBinder :: Parser Name
+pLamBinder :: Parser (Name, ArgInfo)
 pLamBinder =
-    pName
+    (,Right Expl) <$> pName
+    <|> try (do
+        _ <- charL '{'
+        x <- pName
+        _ <- charL '='
+        y <- pName
+        _ <- charL '}'
+        pure (y, Left x))
+    <|> (,Right Impl) <$> (charL '{' *> pName <* charL '}')
     <?> "LamBinder"
 
 pLam :: Parser Raw
@@ -62,34 +70,45 @@ pLam = do
     xs <- some pLamBinder
     _ <- charL '→'
     r <- pRaw
-    return (foldr Lam r xs)
+    return (foldr (uncurry Lam) r xs)
     <?> "Lam"
 
-pArg :: Parser Raw
+pArg :: Parser (Raw, ArgInfo)
 pArg =
-    pAtom
+    (,Right Expl) <$> pAtom
+    <|> try ((,Right Impl) <$> (charL '{' *> pRaw <* charL '}'))
+    <|> (do
+        _ <- charL '{'
+        x <- pName
+        _ <- charL '='
+        r <- pRaw
+        _ <- charL '}'
+        pure (r, Left x))
     <?> "Arg"
+
 
 pApp :: Parser Raw
 pApp = do
     f <- pAtom
     as <- some pArg
-    return (foldl App f as) <?> "RApp"
+    return (foldl (uncurry . App) f as)
+    <?> "App"
 
 pU :: Parser Raw
 pU = U <$ charL 'U' <?> "U"
 
-pPiBinder :: Parser (Name, Raw)
+pPiBinder :: Parser ((Name, Raw), Icit)
 pPiBinder =
-    ((,) <$> (charL '(' *> pName <* charL ':') <*> pRaw <* charL ')')
+    (,Expl) <$> ((,) <$> (charL '(' *> pName <* charL ':') <*> pRaw <* charL ')')
+    <|> (,Impl) <$> ((,) <$> (charL '{' *> pName <* charL ':') <*> pRaw <* charL '}')
     <?> "PiBinder"
 
 pPi :: Parser Raw
 pPi =  do
-    (x, a) <- pPiBinder
+    ((x, a), i) <- pPiBinder
     _ <- charL '→'
     b <- pRaw
-    return (Pi x a b)  <?> "RPi"
+    return (Pi x i a b)  <?> "RPi"
 
 pLet :: Parser Raw
 pLet = Let <$> (stringL "let" *> pName) <*> (charL ':' *> pRaw)

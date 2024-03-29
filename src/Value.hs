@@ -28,17 +28,17 @@ instance Snoc Env Env Val Val where
     _Snoc = prism
         (\(Env env, val) -> Env (env `snoc` val))
         (\(Env env) -> case unsnoc env of
-            Nothing       -> Left (Env mempty)
+            Nothing        -> Left (Env mempty)
             Just (env', v) -> Right (Env env', v))
 
 -- | Spine
-newtype Spine = Spine {unSpine :: [Val]}
+newtype Spine = Spine {unSpine :: [(Val, Icit)]}
     deriving (Eq, Show, Semigroup, Monoid)
 
 pattern SpNil :: Spine
 pattern SpNil = Spine []
 
-instance Snoc Spine Spine Val Val where
+instance Snoc Spine Spine (Val, Icit) (Val, Icit) where
     _Snoc = prism
         (\(Spine xs, x) -> Spine (x : xs))
         (\(Spine xs) -> case uncons xs of
@@ -58,8 +58,8 @@ type VTy = Val
 data Val
     = VRigid Lvl Spine
     | VFlex MetaVar Spine
-    | VLam Name Closure
-    | VPi Name VTy Closure
+    | VLam Name Icit Closure
+    | VPi Name Icit VTy Closure
     | VU
     deriving (Eq, Show)
 

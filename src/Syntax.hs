@@ -3,7 +3,7 @@
 module Syntax (
     Ix,
     Lvl,
-    EnvSpec(..),
+    Pruning,
     Type,
     Term(..),
     TermF(..)
@@ -19,9 +19,9 @@ type Ix = Int
 -- | De Bruijn level.
 type Lvl = Int
 
--- | Bound or Defined
-data EnvSpec = Bound | Defined
-    deriving (Eq, Show)
+-- | Pruning
+-- Bound = Just icit, Defined = Nothing
+type Pruning = [Maybe Icit]
 
 -- | Types.
 type Type = Term
@@ -30,13 +30,13 @@ type Type = Term
 -- under the environment of length @n@
 data Term
     = Var Ix
-    | App Term Term
-    | Lam Name Term
+    | App Term Term Icit
+    | AppPruning Term Pruning
+    | Lam Name Icit Term
     | Let Name Type Term Term
-    | Pi Name Type Type
+    | Pi Name Icit Type Type
     | U
     | Meta MetaVar
-    | InsertedMeta MetaVar [EnvSpec]
     deriving (Eq, Show)
 
 makeBaseFunctor ''Term
