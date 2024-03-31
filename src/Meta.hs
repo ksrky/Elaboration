@@ -19,7 +19,7 @@ import           Data.IORef
 import           Value
 
 -- | Meta entry.
-data MetaEntry = Solved Val | Unsolved
+data MetaEntry = Solved Val VTy | Unsolved VTy
     deriving (Eq, Show)
 
 -- | Meta variable.
@@ -34,13 +34,13 @@ instance Show MetaVar where
 class HasMetaCtx r where
     nextMetaId_ :: Lens' r (IORef Int)
 
-newMetaVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => m MetaVar
-newMetaVar = do
+newMetaVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => VTy -> m MetaVar
+newMetaVar a = do
     ref <- view nextMetaId_
     liftIO $ do
         mid <- readIORef ref
         writeIORef ref (mid + 1)
-        MetaVar mid <$> newIORef Unsolved
+        MetaVar mid <$> newIORef (Unsolved a)
 
 readMetaEntry :: MonadIO m => MetaVar -> m MetaEntry
 readMetaEntry = liftIO . readIORef . view metaEntry

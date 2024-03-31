@@ -62,8 +62,8 @@ vAppSpine t (sp :> (u, icit)) = do
 
 vMeta :: MonadIO m => MetaVar -> m Val
 vMeta m = readMetaEntry m <&> (\case
-    Solved v -> v
-    Unsolved -> VMeta m)
+    Solved v _ -> v
+    Unsolved _ -> VMeta m)
 
 -- We apply a value to a mask of entries from the environment.
 vAppPruning :: MonadIO m => Env -> Val -> Pruning -> m Val
@@ -77,8 +77,8 @@ vAppPruning _ _ _ = error "impossible"
 force :: MonadIO m => Val -> m Val
 force = \case
   VFlex m sp -> readMetaEntry m >>= \case
-    Solved t -> force =<< vAppSpine t sp
-    Unsolved -> return $ VFlex m sp
+    Solved t _ -> force =<< vAppSpine t sp
+    Unsolved _ -> return $ VFlex m sp
   t -> return t
 
 -- | Convert De Bruijn level to index

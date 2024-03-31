@@ -4,6 +4,7 @@ module Value (
     Env(..),
     Spine(unSpine),
     pattern SpNil,
+    spineLength,
     Closure(..),
     VTy,
     Val(..),
@@ -16,8 +17,7 @@ import                          Control.Lens.Combinators
 import                          Control.Lens.Cons
 import                          Data.Vector              (Vector)
 import {-# SOURCE #-}           Meta
-import                          Prelude                  hiding (length)
-import                          Syntax
+import                          Syntax 
 
 
 -- | Value environment
@@ -46,6 +46,9 @@ instance Snoc Spine Spine (Val, Icit) (Val, Icit) where
             Just (x, xs') -> Right (Spine xs', x))
 
 {-# complete SpNil, (:>) #-}
+
+spineLength :: Spine -> Lvl
+spineLength = length . unSpine
 
 -- | Closure
 data Closure = Closure Env Term

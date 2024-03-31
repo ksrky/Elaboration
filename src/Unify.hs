@@ -34,6 +34,14 @@ data PartialRenaming = ParRen {
 
 makeLenses ''PartialRenaming
 
+initParRen :: PartialRenaming
+initParRen = ParRen
+    { _occvar = Nothing
+    , _domain = 0
+    , _codomain = 0
+    , _renaming = IM.empty
+    }
+
 liftParRen :: PartialRenaming -> PartialRenaming
 liftParRen pren@(ParRen{_domain = dom, _codomain = cod}) = pren
     & domain %~ (+ 1)
@@ -43,26 +51,53 @@ liftParRen pren@(ParRen{_domain = dom, _codomain = cod}) = pren
 skipParRen :: PartialRenaming -> PartialRenaming
 skipParRen pren = pren & codomain %~ (+ 1)
 
-invert :: (MonadIO m, MonadThrow m) => Lvl -> Spine -> m PartialRenaming
+invert :: (MonadIO m, MonadThrow m) => Lvl -> Spine -> m (PartialRenaming, Pruning)
 invert lvl sp = do
     (dom, ren, nlvars, fsp) <- foldrM (\(t, icit) (dom, ren, nlvars, fsp) -> do
         force t >>= \case
-            VVar x | IM.notMember x ren || x `elem` nlvars ->
+            VVar x | IM.member x ren ->
                 return (dom + 1, IM.insert x dom ren, x : nlvars, (x, icit) : fsp)
             VVar x ->
                 return (dom + 1, IM.insert x dom ren, nlvars, (x, icit) : fsp)
             _ -> throw $ UnifyError ""
         ) (0, IM.empty, [], []) (unSpine sp)
-    let pr = map (\case
+    let pren = map (\case
             (x, _) | x `elem` nlvars -> Nothing
             (_, i) -> Just i) fsp
-        mb_pr = if null pr then Nothing else Just pr
-    return $ ParRen
-        { _occvar = Nothing
-        , _domain = dom
-        , _codomain = lvl
-        , _renaming = ren
-        }
+    return
+        ( ParRen
+            { _occvar = Nothing
+            , _domain = dom
+            , _codomain = lvl
+            , _renaming = ren
+            }
+        , pren)
+
+pruneTy :: forall m. (MonadIO m, MonadThrow m) =>
+    Pruning -> VTy -> m Type
+pruneTy prun ty = do
+    ty' <- force ty
+    go initParRen prun ty'
+  where
+    go :: PartialRenaming -> Pruning -> Val -> m Type
+    go pren [] a = rename pren a
+    go pren (pr :> Nothing) (VPi x i a b) = do
+        cl <- b |@ VVar (pren ^. codomain)
+        Pi x i <$> rename pren a <*> go (liftParRen pren) pr cl
+    go pren (pr :> Just _) (VPi _ _ _ b) = go (skipParRen pren) pr =<< (b |@ VVar (pren ^. codomain))
+    go _ _ _ = error "impossible"
+
+pruneMeta :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
+    Pruning -> MetaVar -> m MetaVar
+pruneMeta prun m = do
+    mty <- readMetaEntry m >>= \case
+        Unsolved a -> return a
+        _          -> error "impossible"
+    prunedTy <- evalTerm Env.empty =<< pruneTy prun mty
+    m' <- newMetaVar prunedTy
+    solution <- evalTerm Env.empty undefined -- mkLams ( length pruning) mty $ AppPruning (Meta m') pruning
+    writeMetaEntry m (Solved solution mty)
+    pure m'
 
 renameSpine :: (MonadIO m, MonadThrow m) => PartialRenaming -> Term -> Spine -> m Term
 renameSpine _ t SpNil = return t
@@ -82,16 +117,46 @@ rename pren t = force t >>= \case
         <*> (rename (liftParRen pren) =<< c |@ VVar (pren ^. codomain))
     VU -> return U
 
-mkLams :: Lvl -> Term -> Term
-mkLams 0 t = t
-mkLams l t = undefined -- Lam ("x" ++ show l) (mkLams (l - 1) t)
+mkLams :: forall m. MonadIO m => Lvl -> VTy -> Term -> m Term
+mkLams 0 _ t = return t
+mkLams l a t = go a 0
+  where
+    go :: VTy -> Lvl -> m Term
+    go _ l' | l' == l = return t
+    go a' l' = force a' >>= \case
+        VPi "_" i _ b -> do
+            cl <- b |@ VVar l'
+            Lam ("x" ++ show l') i <$> go cl (l' + 1)
+        VPi x i _ b   -> do
+            cl <- b |@ VVar l'
+            Lam x i <$> go cl (l' + 1)
+        _ -> error "impossible"
+
+{-
+lams :: Lvl -> VTy -> Tm -> Tm
+lams l a t = go a (0 :: Lvl) where
+  go a l' | l' == l = t
+  go a l' = case force a of
+    VPi "_" i a b -> Lam ("x"++show l') i $ go (b $$ VVar l') (l' + 1)
+    VPi x i a b   -> Lam x i $ go (b $$ VVar l') (l' + 1)
+    _             -> impossible
+-}
 
 solve :: (MonadIO m, MonadThrow m) => Lvl -> MetaVar -> Spine -> Val -> m ()
 solve lvl mvar sp rhs = do
-    pren <- invert lvl sp
+    prenprun <- invert lvl sp
+    solveWithParRen mvar prenprun rhs
+
+solveWithParRen :: (MonadIO m, MonadThrow m) =>
+    MetaVar -> (PartialRenaming, Pruning) -> Val -> m ()
+solveWithParRen mvar (pren, prun) rhs = do
+    mty <- readMetaEntry mvar >>= \case
+        Unsolved a -> return a
+        _          -> error "impossible"
+    _ <- pruneTy prun mty
     rhs' <- rename pren{_occvar = Just mvar} rhs
-    solution <- evalTerm Env.empty $ mkLams (pren ^. domain) rhs'
-    writeMetaEntry mvar (Solved solution)
+    solution <- evalTerm Env.empty =<< mkLams (pren ^. domain) mty rhs'
+    writeMetaEntry mvar (Solved solution mty)
 
 -- | Unify spines.
 unifySpine :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m)
@@ -108,17 +173,47 @@ unify l t u = do
     u' <- force u
     case (t', u') of
         (VLam _ _ c , VLam _ _ c') -> unifyM (l + 1) (c |@ VVar l) (c' |@ VVar l)
-        (_        , VLam _ icit c') -> unifyM (l + 1) (vApp t' (VVar l) icit) (c' |@ VVar l)
+        (_        , VLam _ i c') -> unifyM (l + 1) (vApp t' (VVar l) i) (c' |@ VVar l)
         (VLam _ icit c , _        ) -> unifyM (l + 1) (c |@ VVar l) (vApp t' (VVar l) icit)
         (VU       , VU       ) -> return ()
-        (VPi _ _ a c, VPi _ _ a' c') -> do
+        (VPi _ i a c, VPi _ i' a' c') | i == i' -> do
             unify l a a'
             unifyM (l + 1) (c |@ VVar l) (c' |@ VVar l)
         (VRigid x sp, VRigid x' sp') | x == x' -> unifySpine l sp sp'
-        (VFlex m sp , VFlex m' sp' ) | m == m' -> unifySpine l sp sp'
+        (VFlex m sp , VFlex m' sp') | m == m' -> intersect l m sp sp'
+        (VFlex m sp , VFlex m' sp')           -> flexFlex l m sp m' sp'
         (VFlex m sp , _            ) -> solve l m sp u'
         (_          , VFlex m' sp' ) -> solve l m' sp' t'
         _                            -> throw $ UnifyError "rigid mismatch error"
+
+flexFlex :: (MonadCatch m, MonadIO m) =>
+    Lvl -> MetaVar -> Spine -> MetaVar -> Spine -> m ()
+flexFlex gamma m sp m' sp'
+    | spineLength sp < spineLength sp' = flexFlex gamma m' sp' m sp
+    | otherwise = (do
+        pren <- invert gamma sp
+        solveWithParRen m pren (VFlex m' sp')
+        ) `catch` \(UnifyError _) -> solve gamma m' sp' (VFlex m sp)
+
+intersect :: forall r m. (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m) =>
+    Lvl -> MetaVar -> Spine -> Spine -> m ()
+intersect l m sp sp' =
+    go sp sp' >>= \case
+        Nothing                     -> unifySpine l sp sp'
+        Just pr | Nothing `elem` pr -> void $ pruneMeta pr m
+                | otherwise         -> pure ()
+  where
+    go :: Spine -> Spine -> m (Maybe Pruning)
+    go SpNil SpNil = return $ Just []
+    go (sp0 :> (t, i)) (sp0' :> (t', _)) = do
+        u <- force t
+        u' <- force t'
+        case (u, u') of
+            (VVar x, VVar x') | x == x' -> do
+                mb_pr <- go sp0 sp0'
+                return $ (Just i:) <$> mb_pr
+            _ -> return Nothing
+    go _ _ = error "impossible"
 
 unifyM :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m)
     => Lvl -> m Val -> m Val -> m ()
