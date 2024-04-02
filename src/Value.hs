@@ -2,7 +2,7 @@
 
 module Value (
     Env(..),
-    Spine(unSpine),
+    Spine,
     pattern SpNil,
     spineLength,
     Closure(..),
@@ -32,23 +32,15 @@ instance Snoc Env Env Val Val where
             Just (env', v) -> Right (Env env', v))
 
 -- | Spine
-newtype Spine = Spine {unSpine :: [(Val, Icit)]}
-    deriving (Eq, Show, Semigroup, Monoid)
+type Spine = [(Val, Icit)]
 
 pattern SpNil :: Spine
-pattern SpNil = Spine []
-
-instance Snoc Spine Spine (Val, Icit) (Val, Icit) where
-    _Snoc = prism
-        (\(Spine xs, x) -> Spine (x : xs))
-        (\(Spine xs) -> case uncons xs of
-            Nothing       -> Left (Spine [])
-            Just (x, xs') -> Right (Spine xs', x))
+pattern SpNil = []
 
 {-# complete SpNil, (:>) #-}
 
 spineLength :: Spine -> Lvl
-spineLength = length . unSpine
+spineLength = length
 
 -- | Closure
 data Closure = Closure Env Term
@@ -67,7 +59,7 @@ data Val
     deriving (Eq, Show)
 
 pattern VVar :: Lvl -> Val
-pattern VVar l = VRigid l (Spine [])
+pattern VVar l = VRigid l []
 
 pattern VMeta :: MetaVar -> Val
-pattern VMeta m = VFlex m (Spine [])
+pattern VMeta m = VFlex m []
