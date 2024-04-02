@@ -6,7 +6,7 @@ module Value (
     pattern SpNil,
     spineLength,
     Closure(..),
-    VTy,
+    ValTy,
     Val(..),
     pattern VVar,
     pattern VMeta
@@ -17,7 +17,7 @@ import                          Control.Lens.Combinators
 import                          Control.Lens.Cons
 import                          Data.Vector              (Vector)
 import {-# SOURCE #-}           Meta
-import                          Syntax 
+import                          Syntax
 
 
 -- | Value environment
@@ -55,14 +55,14 @@ data Closure = Closure Env Term
     deriving (Eq, Show)
 
 -- | Value types.
-type VTy = Val
+type ValTy = Val
 
 -- | Values
 data Val
     = VRigid Lvl Spine
     | VFlex MetaVar Spine
     | VLam Name Icit Closure
-    | VPi Name Icit VTy Closure
+    | VPi Name Icit ValTy Closure
     | VU
     deriving (Eq, Show)
 

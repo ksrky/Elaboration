@@ -15,4 +15,4 @@ spec = do
         it "(λx → x) U" $
             evalClosedTerm (App (Lam "x" Expl (Var 0)) U Expl) `shouldReturn` VU
         it "let id : {A : U} → A → A = λx → x; id U" $
-            evalClosedTerm (Let "id" (Pi "A" Impl U (Pi "_" Expl (Var 1) (Var 1))) (Lam "x" Expl (Var 0)) (App (Var 0) U Expl)) `shouldReturn` VU
+            evalClosedTerm (Let "id" (Pi "A" Impl U (Arrow (Var 1) (Var 1))) (Lam "x" Expl (Var 0)) (App (Var 0) U Expl)) `shouldReturn` VU

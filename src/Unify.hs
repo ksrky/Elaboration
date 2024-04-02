@@ -16,7 +16,6 @@ import           Eval
 import           Meta
 import           Syntax
 import           Value
-import qualified Value.Env                as Env
 
 -- | Unification error
 newtype UnifyError = UnifyError String
@@ -74,7 +73,7 @@ invert lvl sp = do
         , pren)
 
 pruneTy :: forall m. (MonadIO m, MonadThrow m) =>
-    Pruning -> VTy -> m Type
+    Pruning -> ValTy -> m Type
 pruneTy prun ty = do
     ty' <- force ty
     go initParRen prun ty'
@@ -93,9 +92,9 @@ pruneMeta prun m = do
     mty <- readMetaEntry m >>= \case
         Unsolved a -> return a
         _          -> error "impossible"
-    prunedTy <- evalTerm Env.empty =<< pruneTy prun mty
+    prunedTy <- evalClosedTerm =<< pruneTy prun mty
     m' <- newMetaVar prunedTy
-    solution <- evalTerm Env.empty undefined -- mkLams ( length pruning) mty $ AppPruning (Meta m') pruning
+    solution <- evalClosedTerm undefined -- mkLams ( length pruning) mty $ AppPruning (Meta m') pruning
     writeMetaEntry m (Solved solution mty)
     pure m'
 
@@ -117,11 +116,11 @@ rename pren t = force t >>= \case
         <*> (rename (liftParRen pren) =<< c |@ VVar (pren ^. codomain))
     VU -> return U
 
-mkLams :: forall m. MonadIO m => Lvl -> VTy -> Term -> m Term
+mkLams :: forall m. MonadIO m => Lvl -> ValTy -> Term -> m Term
 mkLams 0 _ t = return t
 mkLams l a t = go a 0
   where
-    go :: VTy -> Lvl -> m Term
+    go :: ValTy -> Lvl -> m Term
     go _ l' | l' == l = return t
     go a' l' = force a' >>= \case
         VPi "_" i _ b -> do
@@ -133,7 +132,7 @@ mkLams l a t = go a 0
         _ -> error "impossible"
 
 {-
-lams :: Lvl -> VTy -> Tm -> Tm
+lams :: Lvl -> ValTy -> Tm -> Tm
 lams l a t = go a (0 :: Lvl) where
   go a l' | l' == l = t
   go a l' = case force a of
@@ -155,7 +154,7 @@ solveWithParRen mvar (pren, prun) rhs = do
         _          -> error "impossible"
     _ <- pruneTy prun mty
     rhs' <- rename pren{_occvar = Just mvar} rhs
-    solution <- evalTerm Env.empty =<< mkLams (pren ^. domain) mty rhs'
+    solution <- evalClosedTerm =<< mkLams (pren ^. domain) mty rhs'
     writeMetaEntry mvar (Solved solution mty)
 
 -- | Unify spines.

@@ -6,6 +6,7 @@ module Syntax (
     Pruning,
     Type,
     Term(..),
+    pattern Arrow,
     TermF(..)
     ) where
 
@@ -38,5 +39,8 @@ data Term
     | U
     | Meta MetaVar
     deriving (Eq, Show)
+
+pattern Arrow :: Type -> Type -> Type
+pattern Arrow a b = Pi "_" Expl a b
 
 makeBaseFunctor ''Term

@@ -21,7 +21,7 @@ import           Value
 import           Value.Env                as Env
 
 -- type of every variable in scope
-type Bounds = [(Name, VTy)]
+type Bounds = [(Name, ValTy)]
 
 -- | Defined or Bound
 data Locals
@@ -47,7 +47,7 @@ instance HasMetaCtx ElabCtx where
 
 type ElabM = ReaderT ElabCtx
 
-lookupBounds :: MonadThrow m => Name -> ElabM m (Term, VTy)
+lookupBounds :: MonadThrow m => Name -> ElabM m (Term, ValTy)
 lookupBounds x = go 0 =<< view bounds
   where
     go _ [] = throwString "variable out of scope"
@@ -55,13 +55,13 @@ lookupBounds x = go 0 =<< view bounds
         | x == x' = return (Var i, a)
         | otherwise = go (i + 1) tys
 
-bind :: Monad m => Name -> VTy -> ElabM m a -> ElabM m a
+bind :: Monad m => Name -> ValTy -> ElabM m a -> ElabM m a
 bind x a =
     local (\ctx -> ctx
         & env %~ Env.increment
         & bounds %~ ((x, a) :))
 
-define :: Monad m => Name -> Val -> VTy -> ElabM m a -> ElabM m a
+define :: Monad m => Name -> Val -> ValTy -> ElabM m a -> ElabM m a
 define x t a =
     local (\ctx -> ctx
         & env %~ (`Env.append` t)
@@ -73,11 +73,11 @@ closeTy lcls b = case lcls of
     Bind lcls' x a     -> closeTy lcls' (Pi x Expl a b)
     Define lcls' x a t -> closeTy lcls' (Let x a t b)
 
-freshMeta :: MonadIO m => VTy -> ElabM m Term
+freshMeta :: MonadIO m => ValTy -> ElabM m Term
 freshMeta a = do
     lvl <- views env Env.level
     lcls <- view locals
-    closed <- evalTerm Env.empty . closeTy lcls =<< quote lvl a
+    closed <- evalClosedTerm . closeTy lcls =<< quote lvl a
     mvar <- newMetaVar closed
     prun <- view pruning
     return $ AppPruning (Meta mvar) prun
@@ -88,7 +88,7 @@ unifyCatch t t' = do
     unify l t t'
         `catch` \(UnifyError msg) -> throwString msg
 
-insert' :: MonadIO m => Term -> VTy -> ElabM m (Term, VTy)
+insert' :: MonadIO m => Term -> ValTy -> ElabM m (Term, ValTy)
 insert' t va = force va >>= \case
         VPi _ Impl a b -> do
             m <- freshMeta a
@@ -97,11 +97,11 @@ insert' t va = force va >>= \case
             insert' (App t m Impl) =<< b |@ mv
         va' -> pure (t, va')
 
-insert :: MonadIO m => Term -> VTy -> ElabM m (Term, VTy)
+insert :: MonadIO m => Term -> ValTy -> ElabM m (Term, ValTy)
 insert t@(Lam _ Impl _) va = return (t, va)
 insert t                va = insert' t va
 
-insertUntilName :: (MonadIO m, MonadThrow m) => Name -> Term -> VTy -> ElabM m (Term, VTy)
+insertUntilName :: (MonadIO m, MonadThrow m) => Name -> Term -> ValTy -> ElabM m (Term, ValTy)
 insertUntilName name t va = force va >>= \case
     va'@(VPi x Impl a b) -> do
         if x == name then return (t, va')
@@ -113,7 +113,7 @@ insertUntilName name t va = force va >>= \case
     _ -> throwString "NoNamedImplicitArg name"
 
 -- | Bidirectional algorithm
-check :: (MonadCatch m, MonadIO m) => Raw.Raw -> VTy -> ElabM m Term
+check :: (MonadCatch m, MonadIO m) => Raw.Raw -> ValTy -> ElabM m Term
 check (Raw.SrcPos pos t) a = locally srcPos (const pos) $ check t a
 check (Raw.Lam x fi t) (VPi x' i' a c) | either (\y -> y == x' && i' == Impl) (== i') fi = do
     l <- views env Env.level
@@ -134,7 +134,7 @@ check t a = do
     unifyCatch a tty
     return t'
 
-infer :: (MonadCatch m, MonadIO m) => Raw.Raw -> ElabM m (Term, VTy)
+infer :: (MonadCatch m, MonadIO m) => Raw.Raw -> ElabM m (Term, ValTy)
 infer (Raw.SrcPos pos t) = locally srcPos (const pos) $ infer t
 infer (Raw.Var x) = lookupBounds x
 infer Raw.U = return (U, VU)
