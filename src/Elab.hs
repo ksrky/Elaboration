@@ -10,6 +10,7 @@ import           Common
 import           Control.Exception.Safe
 import           Control.Lens.Combinators
 import           Control.Lens.Operators
+import           Control.Monad
 import           Control.Monad.Reader
 import           Data.IORef
 import           Eval

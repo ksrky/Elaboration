@@ -48,23 +48,20 @@ default-extensions:
   - LambdaCase
   - PatternSynonyms
   - OverloadedStrings
+  - TupleSections
   - TypeFamilies
 
 library:
   source-dirs: src
   dependencies:
+    - containers
     - lens
+    - megaparsec
     - mtl
+    - recursion-schemes
+    - safe-exceptions
+    - text
     - vector
-  default-extensions:
-    - DataKinds
-    - GADTs
-    - GeneralizedNewtypeDeriving
-    - KindSignatures
-    - LambdaCase
-    - RankNTypes
-    - TupleSections
-    - TypeOperators
 
 tests:
   Elaboration-test:

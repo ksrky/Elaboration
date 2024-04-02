@@ -46,15 +46,8 @@ library
       LambdaCase
       PatternSynonyms
       OverloadedStrings
-      TypeFamilies
-      DataKinds
-      GADTs
-      GeneralizedNewtypeDeriving
-      KindSignatures
-      LambdaCase
-      RankNTypes
       TupleSections
-      TypeOperators
+      TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
@@ -85,6 +78,7 @@ test-suite Elaboration-test
       LambdaCase
       PatternSynonyms
       OverloadedStrings
+      TupleSections
       TypeFamilies
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
