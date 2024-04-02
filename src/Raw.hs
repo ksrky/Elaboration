@@ -25,9 +25,9 @@ data Raw
       Lam Name ArgInfo Raw
     | -- | @t u@ | @t {u}@ | @t {x = u}@
       App Raw Raw ArgInfo
-    | -- | @(x : a) → b@ | @{x : a} → b@ | @{l = x : a} → b@
+    | -- | @(x : a) → b@ | @{x : a} → b@
       Pi Name Icit Raw Raw
-    | -- | @let x : a = t in u@
+    | -- | @let x : a = t; u@
       Let Name Raw Raw Raw
     | -- | @U@
       U

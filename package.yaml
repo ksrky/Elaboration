@@ -46,6 +46,7 @@ ghc-options:
 default-extensions:
   - ImportQualifiedPost
   - LambdaCase
+  - PatternSynonyms
   - OverloadedStrings
   - TypeFamilies
 

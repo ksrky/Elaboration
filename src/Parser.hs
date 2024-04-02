@@ -39,7 +39,7 @@ parens = between (char '(') (char ')')
 pName :: Parser Name
 pName = do
     x <- lexeme ((:) <$> letterChar <*> many alphaNumChar) <?> "Name"
-    when (x `elem` ["let", "in", "λ", "U"]) empty
+    when (x `elem` ["let", "λ", "U"]) empty
     return x
 
 withSrcPos :: Parser Raw -> Parser Raw
@@ -106,7 +106,7 @@ pPi = do
 
 pLet :: Parser Raw
 pLet = Let <$> (stringL "let" *> pName) <*> (charL ':' *> pRaw)
-    <*> (stringL "=" *> pRaw) <*> (stringL "in" *> pRaw) <?> "Let"
+    <*> (charL '=' *> pRaw) <*> (charL ';' *> pRaw) <?> "Let"
 
 pHole :: Parser Raw
 pHole = Hole <$ charL '_' <?> "Hole"

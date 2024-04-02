@@ -32,7 +32,7 @@ spec = do
       stripParseProg "(x : A) → B" `shouldReturn` Pi "x" Expl (Var "A") (Var "B")
     it "{x : A} → B" $
       stripParseProg "{x : A} → B" `shouldReturn` Pi "x" Impl (Var "A") (Var "B")
-    it "let x : A = t in u" $
-      stripParseProg "let x : A = t in u" `shouldReturn` Let "x" (Var "A") (Var "t") (Var "u")
+    it "let x : A = t; u" $
+      stripParseProg "let x : A = t; u" `shouldReturn` Let "x" (Var "A") (Var "t") (Var "u")
     it "_" $
       stripParseProg "_" `shouldReturn` Hole
