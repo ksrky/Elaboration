@@ -11,6 +11,7 @@ import           Control.Lens.Cons
 import           Control.Lens.Operators
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Control.Monad
 import           Data.Foldable
 import qualified Data.IntMap.Strict       as IM
 import           Eval
