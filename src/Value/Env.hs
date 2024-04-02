@@ -10,10 +10,10 @@ module Value.Env (
     pattern Nil
     ) where
 
-import           Control.Lens.Cons
-import qualified Data.Vector       as Vector
-import           Prelude           hiding (lookup)
-import           Value
+import Control.Lens.Cons
+import Data.Vector       qualified as Vector
+import Prelude           hiding (lookup)
+import Value
 
 empty :: Env
 empty = Env Vector.empty

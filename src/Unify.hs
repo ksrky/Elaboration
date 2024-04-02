@@ -5,19 +5,19 @@ module Unify (
     unify
     ) where
 
-import           Control.Exception.Safe
-import           Control.Lens.Combinators
-import           Control.Lens.Cons
-import           Control.Lens.Operators
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Control.Monad
-import           Data.Foldable
-import qualified Data.IntMap.Strict       as IM
-import           Eval
-import           Meta
-import           Syntax
-import           Value
+import Control.Exception.Safe
+import Control.Lens.Combinators
+import Control.Lens.Cons
+import Control.Lens.Operators
+import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.State
+import Data.Foldable
+import Data.IntMap.Strict       qualified as IM
+import Eval
+import Meta
+import Syntax
+import Value
 
 -- | Unification error
 newtype UnifyError = UnifyError String

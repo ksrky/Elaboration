@@ -8,9 +8,9 @@ module Raw (
     stripSrcPos
     ) where
 
-import           Common
-import           Data.Functor.Foldable
-import           Data.Functor.Foldable.TH
+import Common
+import Data.Functor.Foldable
+import Data.Functor.Foldable.TH
 
 -- | Argument information
 type ArgInfo = Either Name Icit

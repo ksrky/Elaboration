@@ -1,6 +1,7 @@
 module Common (Name, Icit(..)) where
-import           Control.Lens.Cons
-import           Control.Lens.Prism
+
+import Control.Lens.Cons
+import Control.Lens.Prism
 
 -- | Variable name.
 type Name = String

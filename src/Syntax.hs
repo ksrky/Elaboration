@@ -10,9 +10,9 @@ module Syntax (
     TermF(..)
     ) where
 
-import                          Common
-import                          Data.Functor.Foldable.TH
-import {-# SOURCE #-}           Meta
+import                Common
+import                Data.Functor.Foldable.TH
+import {-# SOURCE #-} Meta
 
 -- | De Bruijn index.
 type Ix = Int
@@ -27,8 +27,7 @@ type Pruning = [Maybe Icit]
 -- | Types.
 type Type = Term
 
--- | Terms. @Tm n@ means that the term is well-scoped
--- under the environment of length @n@
+-- | Terms.
 data Term
     = Var Ix
     | App Term Term Icit

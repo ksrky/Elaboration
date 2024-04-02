@@ -2,16 +2,16 @@
 
 module Parser (parseProg) where
 
-import           Common
-import           Control.Applicative        hiding (many, some)
-import           Control.Exception.Safe     hiding (try)
-import           Control.Monad
-import           Data.Text                  (Text)
-import           Data.Void
-import           Raw
-import           Text.Megaparsec
-import           Text.Megaparsec.Char
-import qualified Text.Megaparsec.Char.Lexer as L
+import Common
+import Control.Applicative        hiding (many, some)
+import Control.Exception.Safe     hiding (try)
+import Control.Monad
+import Data.Text                  (Text)
+import Data.Void
+import Raw
+import Text.Megaparsec
+import Text.Megaparsec.Char
+import Text.Megaparsec.Char.Lexer qualified as L
 
 type Parser = Parsec Void Text
 

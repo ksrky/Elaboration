@@ -6,20 +6,20 @@ module Elab (
     infer
     ) where
 
-import           Common
-import           Control.Exception.Safe
-import           Control.Lens.Combinators
-import           Control.Lens.Operators
-import           Control.Monad
-import           Control.Monad.Reader
-import           Data.IORef
-import           Eval
-import           Meta
-import qualified Raw
-import           Syntax
-import           Unify
-import           Value
-import           Value.Env                as Env
+import Common
+import Control.Exception.Safe
+import Control.Lens.Combinators
+import Control.Lens.Operators
+import Control.Monad
+import Control.Monad.Reader
+import Data.IORef
+import Eval
+import Meta
+import Raw qualified
+import Syntax
+import Unify
+import Value
+import Value.Env                as Env
 
 -- type of every variable in scope
 type Bounds = [(Name, ValTy)]

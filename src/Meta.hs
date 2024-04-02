@@ -11,12 +11,12 @@ module Meta (
     writeMetaEntry
     ) where
 
-import           Control.Lens.Combinators
-import           Control.Lens.Operators
-import           Control.Monad.IO.Class
-import           Control.Monad.Reader.Class
-import           Data.IORef
-import           Value
+import Control.Lens.Combinators
+import Control.Lens.Operators
+import Control.Monad.IO.Class
+import Control.Monad.Reader.Class
+import Data.IORef
+import Value
 
 -- | Meta entry.
 data MetaEntry = Solved Val ValTy | Unsolved ValTy

@@ -1,10 +1,10 @@
 module ParserSpec (spec) where
 
-import           Common
-import           Data.Text  (Text)
-import           Parser
-import           Raw
-import           Test.Hspec
+import Common
+import Data.Text  (Text)
+import Parser
+import Raw
+import Test.Hspec
 
 stripParseProg :: Text -> IO Raw
 stripParseProg = fmap stripSrcPos . parseProg

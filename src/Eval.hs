@@ -9,14 +9,14 @@ module Eval (
     nf
     ) where
 
-import           Common
-import           Control.Lens.Cons
-import           Control.Lens.Operators
-import           Control.Monad.IO.Class
-import           Meta
-import           Syntax
-import           Value
-import qualified Value.Env              as Env
+import Common
+import Control.Lens.Cons
+import Control.Lens.Operators
+import Control.Monad.IO.Class
+import Meta
+import Syntax
+import Value
+import Value.Env              qualified as Env
 
 -- | Evaluation
 evalTerm :: MonadIO m => Env -> Term -> m Val

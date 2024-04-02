@@ -1,11 +1,11 @@
 module EvalSpec (spec) where
 
-import           Common
-import           Eval
-import           Syntax
-import           Test.Hspec
-import           Value
-import qualified Value.Env  as Env
+import Common
+import Eval
+import Syntax
+import Test.Hspec
+import Value
+import Value.Env  qualified as Env
 
 spec :: Spec
 spec = do

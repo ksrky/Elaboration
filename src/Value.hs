@@ -12,12 +12,12 @@ module Value (
     pattern VMeta
     ) where
 
-import                          Common
-import                          Control.Lens.Combinators
-import                          Control.Lens.Cons
-import                          Data.Vector              (Vector)
-import {-# SOURCE #-}           Meta
-import                          Syntax
+import                Common
+import                Control.Lens.Combinators
+import                Control.Lens.Cons
+import                Data.Vector              (Vector)
+import {-# SOURCE #-} Meta
+import                Syntax
 
 
 -- | Value environment
