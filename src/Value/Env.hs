@@ -7,6 +7,7 @@ module Value.Env (
     append,
     increment,
     lookup,
+    fromList,
     pattern Nil
     ) where
 
@@ -29,6 +30,9 @@ increment (Env env) = Env $ env `Vector.snoc` VVar (Vector.length env)
 
 lookup :: Int -> Env -> Val
 lookup i (Env env) = env Vector.! i
+
+fromList :: [Val] -> Env
+fromList = Env . Vector.fromList
 
 pattern Nil :: Env
 pattern Nil <- Env (Vector.null -> True)

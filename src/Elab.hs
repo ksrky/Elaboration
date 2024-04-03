@@ -2,6 +2,8 @@
 
 module Elab (
     ElabCtx(..),
+    initElabCtx,
+    runElabM,
     check,
     infer
     ) where
@@ -46,7 +48,22 @@ makeClassy ''ElabCtx
 instance HasMetaCtx ElabCtx where
     nextMetaId_ = nextMetaId
 
+initElabCtx :: MonadIO m => m ElabCtx
+initElabCtx = do
+    ref <- liftIO $ newIORef 0
+    return $ ElabCtx
+        { _env = Env.empty
+        , _bounds = []
+        , _locals = Here
+        , _pruning = []
+        , _nextMetaId = ref
+        , _srcPos = (0, 0)
+        }
+
 type ElabM = ReaderT ElabCtx
+
+runElabM :: ElabM m a -> ElabCtx -> m a
+runElabM = runReaderT
 
 lookupBounds :: MonadThrow m => Name -> ElabM m (Term, ValTy)
 lookupBounds x = go 0 =<< view bounds
@@ -67,6 +84,12 @@ define x t a =
     local (\ctx -> ctx
         & env %~ (`Env.append` t)
         & bounds %~ ((x, a) :))
+
+closeVal :: MonadIO m => Val -> ElabM m Closure
+closeVal t = do
+    e <- view env
+    l <- views env level
+    Closure e <$> quote (l + 1) t
 
 closeTy :: Locals -> Type -> Type
 closeTy lcls b = case lcls of
@@ -139,7 +162,13 @@ infer :: (MonadCatch m, MonadIO m) => Raw.Raw -> ElabM m (Term, ValTy)
 infer (Raw.SrcPos pos t) = locally srcPos (const pos) $ infer t
 infer (Raw.Var x) = lookupBounds x
 infer Raw.U = return (U, VU)
-infer Raw.Lam{} = throwString "Can't infer type for lambda expression"
+infer (Raw.Lam x (Right i) t) = do
+    e <- view env
+    a <- evalTerm e =<< freshMeta VU
+    (t', b) <- bind x a $ uncurry insert =<< infer t
+    b' <- closeVal b
+    return (Lam x i t', VPi x i a b')
+infer Raw.Lam{} = throwString "Can't infer type for named lambda"
 infer (Raw.App t u fi) = do
     (i', t', tty) <- case fi of
         Left name -> do
