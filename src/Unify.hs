@@ -90,15 +90,13 @@ pruneTy prun ty = do
 
 pruneMeta :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
     Pruning -> MetaVar -> m MetaVar
-pruneMeta prun m = do
-    mty <- readMetaEntry m >>= \case
-        Unsolved a -> return a
-        _          -> error "impossible"
+pruneMeta prun mvar = do
+    mty <- readMetaVarTy mvar -- Unsolved
     prunedTy <- evalClosedTerm =<< pruneTy prun mty
-    m' <- newMetaVar prunedTy
-    solution <- evalClosedTerm undefined -- mkLams ( length pruning) mty $ AppPruning (Meta m') pruning
-    writeMetaEntry m (Solved solution mty)
-    pure m'
+    mvar' <- newMetaVar prunedTy
+    solution <- evalClosedTerm =<< mkLams (length prun) mty (AppPruning (Meta mvar') prun)
+    writeMetaEntry mvar (Solved solution mty)
+    return mvar'
 
 data SpinePruneStatus
     = OKRenaming
@@ -125,8 +123,8 @@ pruneVFlex pren m sp = do
                     put OKNonRenaming
                     return (Just t'', i)
     m' <- case status of
-        OKRenaming    -> readMetaEntry m >>= \case Unsolved _ -> return m; _ -> error "impossible"
-        OKNonRenaming -> readMetaEntry m >>= \case Unsolved _ -> return m; _ -> error "impossible"
+        OKRenaming    -> return m -- Unsolved
+        OKNonRenaming -> return m -- Unsolved
         NeedsPruning  -> pruneMeta (map (\(mt, i) -> i <$ mt) sp') m
     return $ foldr (\(mu, i) t -> maybe t (\u -> App t u i) mu) (Meta m') sp'
 
@@ -172,9 +170,7 @@ solve lvl mvar sp rhs = do
 solveWithParRen :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
     MetaVar -> (PartialRenaming, Pruning) -> Val -> m ()
 solveWithParRen mvar (pren, prun) rhs = do
-    mty <- readMetaEntry mvar >>= \case
-        Unsolved a -> return a
-        _          -> error "impossible"
+    mty <- readMetaVarTy mvar -- Unsolved
     _ <- pruneTy prun mty
     rhs' <- rename pren{_occvar = Just mvar} rhs
     solution <- evalClosedTerm =<< mkLams (pren ^. domain) mty rhs'
@@ -183,9 +179,9 @@ solveWithParRen mvar (pren, prun) rhs = do
 -- | Unify spines.
 unifySpine :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m)
     => Lvl -> Spine -> Spine -> m ()
-unifySpine _ SpNil SpNil           = return ()
-unifySpine l (sp :> (t, _)) (sp' :> (t', _)) = unifySpine l sp sp' >> unify l t t'
-unifySpine _ _ _                   = throw $ UnifyError "rigid mismatch error"
+unifySpine _ SpNil SpNil = return ()
+unifySpine l ((t, _) : sp) ((t', _) : sp') = unify l t t' >> unifySpine l sp sp'
+unifySpine _ _ _  = throw $ UnifyError "rigid mismatch error"
 
 -- | Unify values.
 unify :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m)

@@ -61,7 +61,7 @@ vAppSpine t (sp :> (u, icit)) = do
     vApp t' u icit
 
 vMeta :: MonadIO m => MetaVar -> m Val
-vMeta m = readMetaEntry m <&> (\case
+vMeta m = readMetaVar m <&> (\case
     Solved v _ -> v
     Unsolved _ -> VMeta m)
 
@@ -76,7 +76,7 @@ vAppPruning _ _ _ = error "impossible"
 
 force :: MonadIO m => Val -> m Val
 force = \case
-  VFlex m sp -> readMetaEntry m >>= \case
+  VFlex m sp -> readMetaVar m >>= \case
     Solved t _ -> force =<< vAppSpine t sp
     Unsolved _ -> return $ VFlex m sp
   t -> return t
