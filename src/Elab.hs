@@ -27,23 +27,25 @@ import Value.Env                as Env
 type Bounds = [(Name, ValTy)]
 
 -- | Defined or Bound
-data Locals
-    = Here
-    | Define Locals Name Type Term
-    | Bind Locals Name Type
+data Local
+    = Define Name Type Term
+    | Bind Name Type
     deriving (Eq, Show)
 
 -- | Elaboration context.
 data ElabCtx = ElabCtx {
     _env        :: Env,
     _bounds     :: Bounds,
-    _locals     :: Locals,
+    _locals     :: [Local],
     _pruning    :: Pruning,
     _nextMetaId :: IORef Int,
     _srcPos     :: Raw.SrcPos
     }
 
 makeClassy ''ElabCtx
+
+instance HasEnv ElabCtx where
+    env_ = env
 
 instance HasMetaCtx ElabCtx where
     nextMetaId_ = nextMetaId
@@ -54,7 +56,7 @@ initElabCtx = do
     return $ ElabCtx
         { _env = Env.empty
         , _bounds = []
-        , _locals = Here
+        , _locals = []
         , _pruning = []
         , _nextMetaId = ref
         , _srcPos = (0, 0)
@@ -73,17 +75,26 @@ lookupBounds x = go 0 =<< view bounds
         | x == x' = return (Var i, a)
         | otherwise = go (i + 1) tys
 
-bind :: Monad m => Name -> ValTy -> ElabM m a -> ElabM m a
-bind x a =
+bind :: MonadIO m => Name -> ValTy -> ElabM m a -> ElabM m a
+bind x va k = do
+    a <- quote' va
     local (\ctx -> ctx
         & env %~ Env.increment
-        & bounds %~ ((x, a) :))
+        & bounds %~ ((x, va) :)
+        & locals %~ (Bind x a :)
+        & pruning %~ (|> Nothing)
+        ) k
 
-define :: Monad m => Name -> Val -> ValTy -> ElabM m a -> ElabM m a
-define x t a =
+define :: MonadIO m => Name -> Term -> ValTy -> ElabM m a -> ElabM m a
+define x t va k = do
+    vt <- evalTerm' t
+    a <- quote' va
     local (\ctx -> ctx
-        & env %~ (`Env.append` t)
-        & bounds %~ ((x, a) :))
+        & env %~ (`Env.append` vt)
+        & bounds %~ ((x, va) :)
+        & locals %~ (Define x a t :)
+        & pruning %~ (|> Just Expl)
+        ) k
 
 closeVal :: MonadIO m => Val -> ElabM m Closure
 closeVal t = do
@@ -91,17 +102,15 @@ closeVal t = do
     l <- views env level
     Closure e <$> quote (l + 1) t
 
-closeTy :: Locals -> Type -> Type
-closeTy lcls b = case lcls of
-    Here               -> b
-    Bind lcls' x a     -> closeTy lcls' (Pi x Expl a b)
-    Define lcls' x a t -> closeTy lcls' (Let x a t b)
+closeTy :: [Local] -> Type -> Type
+closeTy [] b                    = b
+closeTy (Bind x a : lcls) b     = closeTy lcls (Pi x Expl a b)
+closeTy (Define x a t : lcls) b = closeTy lcls (Let x a t b)
 
 freshMeta :: MonadIO m => ValTy -> ElabM m Term
 freshMeta a = do
-    lvl <- views env Env.level
     lcls <- view locals
-    closed <- evalClosedTerm . closeTy lcls =<< quote lvl a
+    closed <- evalClosedTerm . closeTy lcls =<< quote' a
     mvar <- newMetaVar closed
     prun <- view pruning
     return $ AppPruning (Meta mvar) prun
@@ -114,12 +123,11 @@ unifyCatch t t' = do
 
 insert' :: MonadIO m => Term -> ValTy -> ElabM m (Term, ValTy)
 insert' t va = force va >>= \case
-        VPi _ Impl a b -> do
-            m <- freshMeta a
-            e <- view env
-            mv <- evalTerm e m
-            insert' (App t m Impl) =<< b |@ mv
-        va' -> pure (t, va')
+    VPi _ Impl a b -> do
+        m <- freshMeta a
+        mv <- evalTerm' m
+        insert' (App t m Impl) =<< b |@ mv
+    va' -> return (t, va')
 
 insert :: MonadIO m => Term -> ValTy -> ElabM m (Term, ValTy)
 insert t@(Lam _ Impl _) va = return (t, va)
@@ -131,8 +139,7 @@ insertUntilName name t va = force va >>= \case
         if x == name then return (t, va')
         else do
             m <- freshMeta a
-            e <- view env
-            mv <- evalTerm e m
+            mv <- evalTerm' m
             insertUntilName name (App t m Impl) =<< b |@ mv
     _ -> throwString "NoNamedImplicitArg name"
 
@@ -147,10 +154,9 @@ check t (VPi x Impl a b) = do
     bind x a $ Lam x Impl <$> (check t =<< b |@ VVar l)
 check (Raw.Let x a t u) b = do
     a' <- check a VU
-    va <- (`evalTerm` a') =<< view env
+    va <- evalTerm' a'
     t' <- check t va
-    vt <- (`evalTerm` t') =<< view env
-    u' <- define x vt va $ check u b
+    u' <- define x t' va $ check u b
     return $ Let x a' t' u'
 check Raw.Hole a = freshMeta a
 check t a = do
@@ -163,8 +169,7 @@ infer (Raw.SrcPos pos t) = locally srcPos (const pos) $ infer t
 infer (Raw.Var x) = lookupBounds x
 infer Raw.U = return (U, VU)
 infer (Raw.Lam x (Right i) t) = do
-    e <- view env
-    a <- evalTerm e =<< freshMeta VU
+    a <- evalTerm' =<< freshMeta VU
     (t', b) <- bind x a $ uncurry insert =<< infer t
     b' <- closeVal b
     return (Lam x i t', VPi x i a b')
@@ -173,40 +178,38 @@ infer (Raw.App t u fi) = do
     (i', t', tty) <- case fi of
         Left name -> do
             (t', tty) <- uncurry (insertUntilName name) =<< infer t
-            pure (Impl, t', tty)
+            return (Impl, t', tty)
         Right Impl -> do
             (t', tty) <- infer t
-            pure (Impl, t', tty)
+            return (Impl, t', tty)
         Right Expl -> do
             (t', tty) <- uncurry insert' =<< infer t
-            pure (Expl, t', tty)
+            return (Expl, t', tty)
     (a, b) <- force tty >>= \case
         VPi _ i'' a b -> do
             unless (i' == i'') $ throwString "IcitMismatch i i'"
-            pure (a, b)
+            return (a, b)
         tty' -> do
             e <- view env
-            a <- evalTerm e =<< freshMeta VU
+            a <- evalTerm' =<< freshMeta VU
             b <- bind "x" a $ Closure e <$> freshMeta VU
             unifyCatch tty' (VPi "x" i' a b)
-            pure (a, b)
+            return (a, b)
     u' <- check u a
-    e <- view env
-    cl <- (b |@) =<< evalTerm e u'
-    pure (App t' u' i', cl)
+    cl <- (b |@) =<< evalTerm' u'
+    return (App t' u' i', cl)
 infer (Raw.Pi x i a b) = do
     a' <- check a VU
-    va <- (`evalTerm` a') =<< view env
+    va <- evalTerm' a'
     b' <- bind x va $ check b VU
     return (Pi x i a' b', VU)
 infer (Raw.Let x a t u) = do
     a' <- check a VU
-    va <- (`evalTerm` a') =<< view env
+    va <- evalTerm' a'
     t' <- check t va
-    vt <- (`evalTerm` t') =<< view env
-    (u', uty) <- define x vt va $ infer u
+    (u', uty) <- define x t' va $ infer u
     return (Let x a' t' u', uty)
 infer Raw.Hole = do
     a <- freshMeta VU >>= \m -> view env >>= (`evalTerm` m)
     t <- freshMeta a
-    pure (t, a)
+    return (t, a)

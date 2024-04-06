@@ -2,6 +2,7 @@
 
 module Value (
     Env(..),
+    HasEnv(..),
     Spine,
     pattern SpNil,
     spineLength,
@@ -30,6 +31,12 @@ instance Snoc Env Env Val Val where
         (\(Env env) -> case unsnoc env of
             Nothing        -> Left (Env mempty)
             Just (env', v) -> Right (Env env', v))
+
+class HasEnv a where
+    env_ :: Lens' a Env
+
+instance HasEnv Env where
+    env_ = id
 
 -- | Spine
 type Spine = [(Val, Icit)]

@@ -1,22 +1,26 @@
 module Eval (
     evalTerm,
     evalClosedTerm,
+    evalTerm',
     (|@),
     vApp,
     force,
     lvl2Ix,
     quote,
+    quote',
     nf
     ) where
 
 import Common
+import Control.Lens.Combinators
 import Control.Lens.Cons
 import Control.Lens.Operators
 import Control.Monad.IO.Class
+import Control.Monad.Reader.Class
 import Meta
 import Syntax
 import Value
-import Value.Env              qualified as Env
+import Value.Env                  qualified as Env
 
 -- | Evaluation
 evalTerm :: MonadIO m => Env -> Term -> m Val
@@ -41,6 +45,11 @@ evalTerm env = \case
 
 evalClosedTerm :: MonadIO m => Term -> m Val
 evalClosedTerm = evalTerm Env.empty
+
+evalTerm' :: (MonadReader r m, HasEnv r, MonadIO m) => Term -> m Val
+evalTerm' t = do
+    env <- view env_
+    evalTerm env t
 
 infixl 8 |@
 
@@ -96,6 +105,11 @@ quote l (VFlex m sp)     = quoteSpine l (Meta m) sp
 quote l (VLam x icit c)  = Lam x icit <$> (quote (l + 1) =<< (c |@ VVar l))
 quote l (VPi x icit a c) = Pi x icit <$> quote l a <*> (quote (l + 1) =<< (c |@ VVar l))
 quote _ VU               = return U
+
+quote' :: (MonadReader r m, HasEnv r, MonadIO m) => Val -> m Term
+quote' v = do
+    l <- views env_ Env.level
+    quote l v
 
 -- | Normalization by evaulation
 nf :: MonadIO m => Env -> Term -> m Term
