@@ -206,7 +206,7 @@ unify l t u = do
 flexFlex :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m) =>
     Lvl -> MetaVar -> Spine -> MetaVar -> Spine -> m ()
 flexFlex gamma m sp m' sp'
-    | spineLength sp < spineLength sp' = flexFlex gamma m' sp' m sp
+    | length sp < length sp' = flexFlex gamma m' sp' m sp
     | otherwise = (do
         pren <- invert gamma sp
         solveWithParRen m pren (VFlex m' sp')

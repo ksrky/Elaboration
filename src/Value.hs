@@ -5,7 +5,6 @@ module Value
     , HasEnv(..)
     , Spine
     , pattern SpNil
-    , spineLength
     , Closure(..)
     , ValTy
     , Val(..)
@@ -21,7 +20,7 @@ import {-# SOURCE #-} Meta
 import                Syntax
 
 
--- | Value environment
+-- | Value environment.
 type Env = Vector Val
 
 class HasEnv a where
@@ -30,16 +29,14 @@ class HasEnv a where
 instance HasEnv Env where
     env_ = id
 
--- | Spine
+-- | Spine.
 type Spine = [(Val, Icit)]
 
+-- | Empty spine.
 pattern SpNil :: Spine
 pattern SpNil = []
 
 {-# complete SpNil, (:>) #-}
-
-spineLength :: Spine -> Lvl
-spineLength = length
 
 -- | Closure
 data Closure = Closure Env Term

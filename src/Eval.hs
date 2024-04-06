@@ -23,7 +23,7 @@ import Syntax
 import Value
 import Value.Env                  qualified as Env
 
--- | Evaluation
+-- | Evaluate terms.
 evalTerm :: MonadIO m => Env -> Term -> m Val
 evalTerm env = \case
     Var i -> return $ Env.lookup i env
@@ -44,9 +44,11 @@ evalTerm env = \case
     U -> return VU
     Meta mvar -> vMeta mvar
 
+-- | Evaluate closed terms.
 evalClosedTerm :: MonadIO m => Term -> m Val
 evalClosedTerm = evalTerm Env.empty
 
+-- | Evaluate terms in @EnvReader@.
 evalTerm' :: (MonadReader r m, HasEnv r, MonadIO m) => Term -> m Val
 evalTerm' t = do
     env <- view env_
@@ -54,10 +56,11 @@ evalTerm' t = do
 
 infixl 8 |@
 
--- | Closure application
+-- | Closure application.
 (|@) :: MonadIO m => Closure -> Val -> m Val
 Closure env t |@ v = evalTerm (Env.append env v) t
 
+-- | Create closure from  MonadReader.
 mkClosure :: (MonadReader r m, HasEnv r) => Term -> m Closure
 mkClosure t = do
     env <- view env_
@@ -67,7 +70,7 @@ vApp :: MonadIO m => Val -> Val -> Icit -> m Val
 vApp (VLam _ _ c) u _     = c |@ u
 vApp (VFlex m sp) u icit  = return $ VFlex m (sp |> (u, icit))
 vApp (VRigid x sp) u icit = return $ VRigid x (sp |> (u, icit))
-vApp _ _ _                = error "vApp"
+vApp _ _ _                = error "impossible: vApp"
 
 vAppSpine :: MonadIO m => Val -> Spine -> m Val
 vAppSpine t SpNil             = return t
@@ -87,14 +90,13 @@ vAppPruning (env :> t) val (pr :> Just icit) = do
     val' <- vAppPruning env val pr
     vApp val' t icit
 vAppPruning (env :> _) val (pr :> Nothing) = vAppPruning env val pr
-vAppPruning _ _ _ = error "impossible"
+vAppPruning _ _ _ = error "impossible: vAppPruning"
 
 force :: MonadIO m => Val -> m Val
-force = \case
-  VFlex m sp -> readMetaVar m >>= \case
+force (VFlex m sp) = readMetaVar m >>= \case
     Solved t _ -> force =<< vAppSpine t sp
     Unsolved _ -> return $ VFlex m sp
-  t -> return t
+force t = return t
 
 -- | Convert De Bruijn level to index
 lvl2Ix :: Lvl -> Lvl -> Ix

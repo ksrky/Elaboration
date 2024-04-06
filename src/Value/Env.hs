@@ -15,11 +15,12 @@ import Control.Lens.Cons
 import Data.Vector       qualified as Vector
 import Prelude           hiding (lookup)
 import Value
+import Syntax
 
 empty :: Env
 empty = Vector.empty
 
-level :: Env -> Int
+level :: Env -> Lvl
 level = Vector.length
 
 append :: Env -> Val -> Env
@@ -28,7 +29,7 @@ append = Vector.snoc
 increment :: Env -> Env
 increment env = env `Vector.snoc` VVar (Vector.length env)
 
-lookup :: Int -> Env -> Val
+lookup :: Ix -> Env -> Val
 lookup i env = env Vector.! i
 
 fromList :: [Val] -> Env

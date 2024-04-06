@@ -20,7 +20,7 @@ type Ix = Int
 -- | De Bruijn level.
 type Lvl = Int
 
--- | Pruning
+-- | Pruning.
 -- Bound = Just icit, Defined = Nothing
 type Pruning = [Maybe Icit]
 

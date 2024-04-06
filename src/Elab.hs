@@ -23,8 +23,8 @@ import Unify
 import Value
 import Value.Env                as Env
 
--- type of every variable in scope
-type Bounds = [(Name, ValTy)]
+-- | type of every variable in scope. reversed order.
+type Telescopes = [(Name, ValTy)]
 
 -- | Defined or Bound
 data Local
@@ -35,7 +35,7 @@ data Local
 -- | Elaboration context.
 data ElabCtx = ElabCtx
     { _env        :: Env
-    , _bounds     :: Bounds
+    , _telescopes :: Telescopes
     , _locals     :: [Local]
     , _pruning    :: Pruning
     , _nextMetaId :: IORef Int
@@ -50,12 +50,13 @@ instance HasEnv ElabCtx where
 instance HasMetaCtx ElabCtx where
     nextMetaId_ = nextMetaId
 
+-- | initialized elaboration context.
 initElabCtx :: MonadIO m => m ElabCtx
 initElabCtx = do
     ref <- liftIO $ newIORef 0
     return $ ElabCtx
         { _env = Env.empty
-        , _bounds = []
+        , _telescopes = []
         , _locals = []
         , _pruning = []
         , _nextMetaId = ref
@@ -67,8 +68,8 @@ type ElabM = ReaderT ElabCtx
 runElabM :: ElabM m a -> ElabCtx -> m a
 runElabM = runReaderT
 
-lookupBounds :: MonadThrow m => Name -> ElabM m (Term, ValTy)
-lookupBounds x = go 0 =<< view bounds
+lookupTelescopes :: MonadThrow m => Name -> ElabM m (Term, ValTy)
+lookupTelescopes x = go 0 =<< view telescopes
   where
     go _ [] = throwString "variable out of scope"
     go i ((x', a) : tys)
@@ -80,7 +81,7 @@ bind x va k = do
     a <- quote' va
     local (\ctx -> ctx
         & env %~ Env.increment
-        & bounds %~ ((x, va) :)
+        & telescopes %~ ((x, va) :)
         & locals %~ (Bind x a :)
         & pruning %~ (|> Nothing)
         ) k
@@ -91,7 +92,7 @@ define x t va k = do
     a <- quote' va
     local (\ctx -> ctx
         & env %~ (`Env.append` vt)
-        & bounds %~ ((x, va) :)
+        & telescopes %~ ((x, va) :)
         & locals %~ (Define x a t :)
         & pruning %~ (|> Just Expl)
         ) k
@@ -165,7 +166,7 @@ check t a = do
 
 infer :: (MonadCatch m, MonadIO m) => Raw.Raw -> ElabM m (Term, ValTy)
 infer (Raw.SrcPos pos t) = locally srcPos (const pos) $ infer t
-infer (Raw.Var x) = lookupBounds x
+infer (Raw.Var x) = lookupTelescopes x
 infer Raw.U = return (U, VU)
 infer (Raw.Lam x (Right i) t) = do
     a <- evalTerm' =<< freshMeta VU
