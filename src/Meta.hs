@@ -5,6 +5,7 @@ module Meta
     , metaId
     , metaEntry
     , MetaVar(..)
+    , UnsolvedMetaVar(..)
     , HasMetaCtx(..)
     , newMetaVar
     , readMetaVar
@@ -26,9 +27,12 @@ data MetaEntry
     | Unsolved ValTy
     deriving (Eq, Show)
 
+-- | Meta id.
+type MetaId = Int
+
 -- | Meta variable.
 data MetaVar = MetaVar
-    { _metaId    :: Int
+    { _metaId    :: MetaId
     , _metaEntry :: IORef MetaEntry
     } deriving (Eq)
 
@@ -37,8 +41,14 @@ makeLenses ''MetaVar
 instance Show MetaVar where
     show (MetaVar i _) = "?" ++ show i
 
+data UnsolvedMetaVar = UnsolvedMetaVar MetaId ValTy
+    deriving (Eq)
+
+instance Show UnsolvedMetaVar where
+    show (UnsolvedMetaVar i _) = "?" ++ show i
+
 class HasMetaCtx r where
-    nextMetaId_ :: Lens' r (IORef Int)
+    nextMetaId_ :: Lens' r (IORef MetaId)
 
 newMetaVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => ValTy -> m MetaVar
 newMetaVar a = do

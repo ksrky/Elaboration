@@ -31,9 +31,9 @@ evalTerm env = \case
         t' <- evalTerm env t
         u' <- evalTerm env u
         vApp t' u' icit
-    AppPruning t pr -> do
+    AppPruning t prun -> do
         t' <- evalTerm env t
-        vAppPruning env t' pr
+        vAppPruning env t' prun
     Lam x icit t -> return $ VLam x icit (Closure env t)
     Let _ _ t u -> do
         t' <- evalTerm env t
@@ -42,7 +42,7 @@ evalTerm env = \case
         a' <- evalTerm env a
         return $ VPi x icit a' (Closure env b)
     U -> return VU
-    Meta mvar -> vMeta mvar
+    Meta m -> vMeta m
 
 -- | Evaluate closed terms.
 evalClosedTerm :: MonadIO m => Term -> m Val
@@ -58,7 +58,7 @@ infixl 8 |@
 
 -- | Closure application.
 (|@) :: MonadIO m => Closure -> Val -> m Val
-Closure env t |@ v = evalTerm (Env.append env v) t
+Closure env t |@ u = evalTerm (Env.append env u) t
 
 -- | Create closure from  MonadReader.
 mkClosure :: (MonadReader r m, HasEnv r) => Term -> m Closure
@@ -67,7 +67,7 @@ mkClosure t = do
     return $ Closure env t
 
 vApp :: MonadIO m => Val -> Val -> Icit -> m Val
-vApp (VLam _ _ c) u _     = c |@ u
+vApp (VLam _ _ t) u _     = t |@ u
 vApp (VFlex m sp) u icit  = return $ VFlex m (sp |> (u, icit))
 vApp (VRigid x sp) u icit = return $ VRigid x (sp |> (u, icit))
 vApp _ _ _                = error "impossible: vApp"
@@ -80,16 +80,16 @@ vAppSpine t (sp :> (u, icit)) = do
 
 vMeta :: MonadIO m => MetaVar -> m Val
 vMeta m = readMetaVar m <&> (\case
-    Solved v _ -> v
+    Solved t _ -> t
     Unsolved _ -> VMeta m)
 
 -- We apply a value to a mask of entries from the environment.
 vAppPruning :: MonadIO m => Env -> Val -> Pruning -> m Val
 vAppPruning Env.Nil val [] = return val
-vAppPruning (env :> t) val (pr :> Just icit) = do
-    val' <- vAppPruning env val pr
+vAppPruning (env :> t) val (prun :> Just icit) = do
+    val' <- vAppPruning env val prun
     vApp val' t icit
-vAppPruning (env :> _) val (pr :> Nothing) = vAppPruning env val pr
+vAppPruning (env :> _) val (prun :> Nothing) = vAppPruning env val prun
 vAppPruning _ _ _ = error "impossible: vAppPruning"
 
 force :: MonadIO m => Val -> m Val

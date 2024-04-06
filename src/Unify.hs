@@ -189,19 +189,19 @@ unify l t u = do
     t' <- force t
     u' <- force u
     case (t', u') of
-        (VLam _ _ c , VLam _ _ c') -> unifyM (l + 1) (c |@ VVar l) (c' |@ VVar l)
-        (_        , VLam _ i c') -> unifyM (l + 1) (vApp t' (VVar l) i) (c' |@ VVar l)
-        (VLam _ icit c , _        ) -> unifyM (l + 1) (c |@ VVar l) (vApp t' (VVar l) icit)
-        (VU       , VU       ) -> return ()
+        (VLam _ _ b   , VLam _ _ b') -> unifyM (l + 1) (b |@ VVar l) (b' |@ VVar l)
+        (_            , VLam _ i b') -> unifyM (l + 1) (vApp t' (VVar l) i) (b' |@ VVar l)
+        (VLam _ icit b, _          ) -> unifyM (l + 1) (b |@ VVar l) (vApp t' (VVar l) icit)
+        (VU, VU) -> return ()
         (VPi _ i a c, VPi _ i' a' c') | i == i' -> do
             unify l a a'
             unifyM (l + 1) (c |@ VVar l) (c' |@ VVar l)
         (VRigid x sp, VRigid x' sp') | x == x' -> unifySpine l sp sp'
         (VFlex m sp , VFlex m' sp') | m == m' -> intersect l m sp sp'
         (VFlex m sp , VFlex m' sp')           -> flexFlex l m sp m' sp'
-        (VFlex m sp , _            ) -> solve l m sp u'
-        (_          , VFlex m' sp' ) -> solve l m' sp' t'
-        _                            -> throw $ UnifyError "rigid mismatch error"
+        (VFlex m sp , _           ) -> solve l m sp u'
+        (_          , VFlex m' sp') -> solve l m' sp' t'
+        _ -> throw $ UnifyError "rigid mismatch error"
 
 flexFlex :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m) =>
     Lvl -> MetaVar -> Spine -> MetaVar -> Spine -> m ()
@@ -228,7 +228,7 @@ intersect l m sp sp' =
         case (u, u') of
             (VVar x, VVar x') | x == x' -> do
                 mb_pr <- go sp0 sp0'
-                return $ (Just i:) <$> mb_pr
+                return $ mb_pr <&> (|> Just i)
             _ -> return Nothing
     go _ _ = error "impossible"
 
