@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Elab (
-    ElabCtx(..),
-    initElabCtx,
-    runElabM,
-    check,
-    infer
+module Elab
+    ( ElabCtx(..)
+    , initElabCtx
+    , runElabM
+    , check
+    , infer
     ) where
 
 import Common
@@ -33,13 +33,13 @@ data Local
     deriving (Eq, Show)
 
 -- | Elaboration context.
-data ElabCtx = ElabCtx {
-    _env        :: Env,
-    _bounds     :: Bounds,
-    _locals     :: [Local],
-    _pruning    :: Pruning,
-    _nextMetaId :: IORef Int,
-    _srcPos     :: Raw.SrcPos
+data ElabCtx = ElabCtx
+    { _env        :: Env
+    , _bounds     :: Bounds
+    , _locals     :: [Local]
+    , _pruning    :: Pruning
+    , _nextMetaId :: IORef Int
+    , _srcPos     :: Raw.SrcPos
     }
 
 makeClassy ''ElabCtx
@@ -98,9 +98,8 @@ define x t va k = do
 
 closeVal :: MonadIO m => Val -> ElabM m Closure
 closeVal t = do
-    e <- view env
     l <- views env level
-    Closure e <$> quote (l + 1) t
+    mkClosure =<< quote (l + 1) t
 
 closeTy :: [Local] -> Type -> Type
 closeTy [] b                    = b
@@ -190,9 +189,8 @@ infer (Raw.App t u fi) = do
             unless (i' == i'') $ throwString "IcitMismatch i i'"
             return (a, b)
         tty' -> do
-            e <- view env
             a <- evalTerm' =<< freshMeta VU
-            b <- bind "x" a $ Closure e <$> freshMeta VU
+            b <- bind "x" a $ mkClosure =<< freshMeta VU
             unifyCatch tty' (VPi "x" i' a b)
             return (a, b)
     u' <- check u a

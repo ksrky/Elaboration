@@ -3,6 +3,7 @@ module Eval (
     evalClosedTerm,
     evalTerm',
     (|@),
+    mkClosure,
     vApp,
     force,
     lvl2Ix,
@@ -56,6 +57,11 @@ infixl 8 |@
 -- | Closure application
 (|@) :: MonadIO m => Closure -> Val -> m Val
 Closure env t |@ v = evalTerm (Env.append env v) t
+
+mkClosure :: (MonadReader r m, HasEnv r) => Term -> m Closure
+mkClosure t = do
+    env <- view env_
+    return $ Closure env t
 
 vApp :: MonadIO m => Val -> Val -> Icit -> m Val
 vApp (VLam _ _ c) u _     = c |@ u

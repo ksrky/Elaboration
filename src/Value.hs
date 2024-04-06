@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 
 module Value (
-    Env(..),
+    Env,
     HasEnv(..),
     Spine,
     pattern SpNil,
@@ -10,7 +10,7 @@ module Value (
     ValTy,
     Val(..),
     pattern VVar,
-    pattern VMeta
+    pattern VMeta,
     ) where
 
 import                Common
@@ -22,15 +22,7 @@ import                Syntax
 
 
 -- | Value environment
-newtype Env = Env (Vector Val)
-    deriving (Eq, Show, Semigroup, Monoid)
-
-instance Snoc Env Env Val Val where
-    _Snoc = prism
-        (\(Env env, val) -> Env (env `snoc` val))
-        (\(Env env) -> case unsnoc env of
-            Nothing        -> Left (Env mempty)
-            Just (env', v) -> Right (Env env', v))
+type Env = Vector Val
 
 class HasEnv a where
     env_ :: Lens' a Env
