@@ -1,14 +1,14 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns    #-}
 
-module Value.Env (
-    empty,
-    level,
-    append,
-    increment,
-    lookup,
-    fromList,
-    pattern Nil
+module Value.Env
+    ( empty
+    , level
+    , append
+    , increment
+    , lookup
+    , fromList
+    , pattern Nil
     ) where
 
 import Control.Lens.Cons

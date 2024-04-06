@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Raw (
-    ArgInfo,
-    SrcPos,
-    Raw(..),
-    RawF(..),
-    stripSrcPos
+module Raw
+    ( ArgInfo
+    , SrcPos
+    , Raw(..)
+    , RawF(..)
+    , stripSrcPos
     ) where
 
 import Common

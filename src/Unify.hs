@@ -1,8 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Unify (
-    UnifyError(..),
-    unify
+module Unify
+    ( UnifyError(..)
+    , unify
     ) where
 
 import Control.Exception.Safe
@@ -25,13 +25,12 @@ newtype UnifyError = UnifyError String
 
 instance Exception UnifyError
 
-data PartialRenaming = ParRen {
-    _occvar   :: Maybe MetaVar,
-    _domain   :: Lvl,
-    _codomain :: Lvl,
-    _renaming :: IM.IntMap Lvl
-    }
-    deriving (Eq, Show)
+data PartialRenaming = ParRen
+    { _occvar   :: Maybe MetaVar
+    , _domain   :: Lvl
+    , _codomain :: Lvl
+    , _renaming :: IM.IntMap Lvl
+    } deriving (Eq, Show)
 
 makeLenses ''PartialRenaming
 

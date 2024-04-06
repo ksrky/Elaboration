@@ -1,16 +1,16 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Value (
-    Env,
-    HasEnv(..),
-    Spine,
-    pattern SpNil,
-    spineLength,
-    Closure(..),
-    ValTy,
-    Val(..),
-    pattern VVar,
-    pattern VMeta,
+module Value
+    ( Env
+    , HasEnv(..)
+    , Spine
+    , pattern SpNil
+    , spineLength
+    , Closure(..)
+    , ValTy
+    , Val(..)
+    , pattern VVar
+    , pattern VMeta
     ) where
 
 import                Common

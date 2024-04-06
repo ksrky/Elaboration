@@ -1,13 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Syntax (
-    Ix,
-    Lvl,
-    Pruning,
-    Type,
-    Term(..),
-    pattern Arrow,
-    TermF(..)
+module Syntax
+    ( Ix
+    , Lvl
+    , Pruning
+    , Type
+    , Term(..)
+    , pattern Arrow
+    , TermF(..)
     ) where
 
 import                Common

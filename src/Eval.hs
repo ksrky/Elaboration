@@ -1,15 +1,15 @@
-module Eval (
-    evalTerm,
-    evalClosedTerm,
-    evalTerm',
-    (|@),
-    mkClosure,
-    vApp,
-    force,
-    lvl2Ix,
-    quote,
-    quote',
-    nf
+module Eval
+    ( evalTerm
+    , evalClosedTerm
+    , evalTerm'
+    , (|@)
+    , mkClosure
+    , vApp
+    , force
+    , lvl2Ix
+    , quote
+    , quote'
+    , nf
     ) where
 
 import Common

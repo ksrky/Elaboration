@@ -1,16 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Meta (
-    MetaEntry(..),
-    metaId,
-    metaEntry,
-    MetaVar(..),
-    HasMetaCtx(..),
-    newMetaVar,
-    readMetaVar,
-    readMetaVarTy,
-    readUnsolvedMetaVar,
-    writeMetaEntry
+module Meta
+    ( MetaEntry(..)
+    , metaId
+    , metaEntry
+    , MetaVar(..)
+    , HasMetaCtx(..)
+    , newMetaVar
+    , readMetaVar
+    , readMetaVarTy
+    , readUnsolvedMetaVar
+    , writeMetaEntry
     ) where
 
 import Control.Lens.Combinators
@@ -30,8 +30,7 @@ data MetaEntry
 data MetaVar = MetaVar
     { _metaId    :: Int
     , _metaEntry :: IORef MetaEntry
-    }
-    deriving (Eq)
+    } deriving (Eq)
 
 makeLenses ''MetaVar
 
