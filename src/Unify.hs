@@ -14,6 +14,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Foldable
 import Data.IntMap.Strict       qualified as IM
+import Data.Set                 qualified as S
 import Eval
 import Meta
 import Syntax
@@ -26,7 +27,7 @@ newtype UnifyError = UnifyError String
 instance Exception UnifyError
 
 data PartialRenaming = ParRen
-    { _occvar   :: Maybe MetaVar
+    { _occvar   :: Maybe UnsolvedMetaVar
     , _domain   :: Lvl
     , _codomain :: Lvl
     , _renaming :: IM.IntMap Lvl
@@ -56,13 +57,13 @@ invert lvl sp = do
     (dom, ren, nlvars, fsp) <- foldrM (\(t, icit) (dom, ren, nlvars, fsp) -> do
         force t >>= \case
             VVar x | IM.member x ren ->
-                return (dom + 1, IM.insert x dom ren, x : nlvars, (x, icit) : fsp)
+                return (dom + 1, IM.insert x dom ren, S.insert x nlvars, (x, icit) : fsp)
             VVar x ->
                 return (dom + 1, IM.insert x dom ren, nlvars, (x, icit) : fsp)
             _ -> throw $ UnifyError ""
-        ) (0, IM.empty, [], []) sp
+        ) (0, IM.empty, S.empty, []) sp
     let pren = map (\case
-            (x, _) | x `elem` nlvars -> Nothing
+            (x, _) | x `S.member` nlvars -> Nothing
             (_, i) -> Just i) fsp
     return
         ( ParRen
@@ -84,13 +85,14 @@ pruneTy prun ty = do
     go pren (pr :> Nothing) (VPi x i a b) = do
         cl <- b |@ VVar (pren ^. codomain)
         Pi x i <$> rename pren a <*> go (liftParRen pren) pr cl
-    go pren (pr :> Just _) (VPi _ _ _ b) = go (skipParRen pren) pr =<< (b |@ VVar (pren ^. codomain))
+    go pren (pr :> Just _) (VPi _ _ _ b) =
+        go (skipParRen pren) pr =<< (b |@ VVar (pren ^. codomain))
     go _ _ _ = error "impossible"
 
 pruneMeta :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
-    Pruning -> MetaVar -> m MetaVar
+    Pruning -> UnsolvedMetaVar -> m UnsolvedMetaVar
 pruneMeta prun mvar = do
-    mty <- readMetaVarTy mvar -- Unsolved
+    mty <- readMetaVarTy mvar
     prunedTy <- evalClosedTerm =<< pruneTy prun mty
     mvar' <- newMetaVar prunedTy
     solution <- evalClosedTerm =<< mkLams (length prun) mty (AppPruning (Meta mvar') prun)
@@ -103,8 +105,8 @@ data SpinePruneStatus
     | NeedsPruning
     deriving (Eq, Show)
 
-pruneVFlex :: forall r m. (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
-    PartialRenaming -> MetaVar -> Spine -> m Term
+pruneVFlex :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
+    PartialRenaming -> UnsolvedMetaVar -> Spine -> m Term
 pruneVFlex pren m sp = do
     (sp', status) <- (`runStateT` OKRenaming) $ forM sp $ \(t, i) -> do
         status <- get
@@ -122,8 +124,8 @@ pruneVFlex pren m sp = do
                     put OKNonRenaming
                     return (Just t'', i)
     m' <- case status of
-        OKRenaming    -> return m -- Unsolved
-        OKNonRenaming -> return m -- Unsolved
+        OKRenaming    -> return m
+        OKNonRenaming -> return m
         NeedsPruning  -> pruneMeta (map (\(mt, i) -> i <$ mt) sp') m
     return $ foldr (\(mu, i) t -> maybe t (\u -> App t u i) mu) (Meta m') sp'
 
@@ -133,7 +135,8 @@ renameSpine _ t SpNil = return t
 renameSpine pren t (sp :> (u, icit)) =
     App <$> renameSpine pren t sp <*> rename pren u <*> pure icit
 
-rename :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) => PartialRenaming -> Val -> m Term
+rename :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
+    PartialRenaming -> Val -> m Term
 rename pren t = force t >>= \case
     VFlex m sp | pren ^. occvar == Just m -> throw $ UnifyError "occurs check"
                | otherwise -> pruneVFlex pren m sp
@@ -161,17 +164,18 @@ mkLams l a t = go a 0
             Lam x i <$> go cl (l' + 1)
         _ -> error "impossible"
 
-solve :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) => Lvl -> MetaVar -> Spine -> Val -> m ()
+solve :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
+    Lvl -> UnsolvedMetaVar -> Spine -> Val -> m ()
 solve lvl mvar sp rhs = do
     prenprun <- invert lvl sp
     solveWithParRen mvar prenprun rhs
 
 solveWithParRen :: (MonadReader r m, HasMetaCtx r, MonadIO m, MonadThrow m) =>
-    MetaVar -> (PartialRenaming, Pruning) -> Val -> m ()
+    UnsolvedMetaVar -> (PartialRenaming, Pruning) -> Val -> m ()
 solveWithParRen mvar (pren, prun) rhs = do
-    mty <- readMetaVarTy mvar -- Unsolved
-    _ <- pruneTy prun mty
-    rhs' <- rename pren{_occvar = Just mvar} rhs
+    mty <- readMetaVarTy mvar
+    void $ pruneTy prun mty
+    rhs' <- rename (pren & occvar ?~ mvar) rhs
     solution <- evalClosedTerm =<< mkLams (pren ^. domain) mty rhs'
     writeMetaEntry mvar (Solved solution mty)
 
@@ -204,7 +208,7 @@ unify l t u = do
         _ -> throw $ UnifyError "rigid mismatch error"
 
 flexFlex :: (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m) =>
-    Lvl -> MetaVar -> Spine -> MetaVar -> Spine -> m ()
+    Lvl -> UnsolvedMetaVar -> Spine -> UnsolvedMetaVar -> Spine -> m ()
 flexFlex gamma m sp m' sp'
     | length sp < length sp' = flexFlex gamma m' sp' m sp
     | otherwise = (do
@@ -213,7 +217,7 @@ flexFlex gamma m sp m' sp'
         ) `catch` \(UnifyError _) -> solve gamma m' sp' (VFlex m sp)
 
 intersect :: forall r m. (MonadReader r m, HasMetaCtx r, MonadCatch m, MonadIO m) =>
-    Lvl -> MetaVar -> Spine -> Spine -> m ()
+    Lvl -> UnsolvedMetaVar -> Spine -> Spine -> m ()
 intersect l m sp sp' =
     go sp sp' >>= \case
         Nothing                     -> unifySpine l sp sp'

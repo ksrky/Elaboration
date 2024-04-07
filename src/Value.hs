@@ -48,14 +48,14 @@ type ValTy = Val
 -- | Values
 data Val
     = VRigid Lvl Spine
-    | VFlex MetaVar Spine
-    | VLam Name Icit Closure
-    | VPi Name Icit ValTy Closure
+    | VFlex  UnsolvedMetaVar Spine
+    | VLam   Name Icit Closure
+    | VPi    Name Icit ValTy Closure
     | VU
     deriving (Eq, Show)
 
 pattern VVar :: Lvl -> Val
 pattern VVar l = VRigid l []
 
-pattern VMeta :: MetaVar -> Val
+pattern VMeta :: UnsolvedMetaVar -> Val
 pattern VMeta m = VFlex m []

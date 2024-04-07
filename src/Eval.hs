@@ -60,7 +60,7 @@ infixl 8 |@
 (|@) :: MonadIO m => Closure -> Val -> m Val
 Closure env t |@ u = evalTerm (Env.append env u) t
 
--- | Create closure from  MonadReader.
+-- | Create closure from MonadReader.
 mkClosure :: (MonadReader r m, HasEnv r) => Term -> m Closure
 mkClosure t = do
     env <- view env_

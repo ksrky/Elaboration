@@ -5,7 +5,7 @@ module Meta
     , metaId
     , metaEntry
     , MetaVar(..)
-    , UnsolvedMetaVar(..)
+    , UnsolvedMetaVar
     , HasMetaCtx(..)
     , newMetaVar
     , readMetaVar
@@ -41,16 +41,12 @@ makeLenses ''MetaVar
 instance Show MetaVar where
     show (MetaVar i _) = "?" ++ show i
 
-data UnsolvedMetaVar = UnsolvedMetaVar MetaId ValTy
-    deriving (Eq)
-
-instance Show UnsolvedMetaVar where
-    show (UnsolvedMetaVar i _) = "?" ++ show i
+type UnsolvedMetaVar = MetaVar
 
 class HasMetaCtx r where
     nextMetaId_ :: Lens' r (IORef MetaId)
 
-newMetaVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => ValTy -> m MetaVar
+newMetaVar :: (MonadReader r m, HasMetaCtx r, MonadIO m) => ValTy -> m UnsolvedMetaVar
 newMetaVar a = do
     ref <- view nextMetaId_
     liftIO $ do
@@ -62,13 +58,13 @@ readMetaVar :: MonadIO m => MetaVar -> m MetaEntry
 readMetaVar = liftIO . readIORef . view metaEntry
 
 readMetaVarTy :: MonadIO m => MetaVar -> m ValTy
-readMetaVarTy mvar = readMetaVar mvar <&> \case
+readMetaVarTy m = readMetaVar m <&> \case
     Solved _ a -> a
     Unsolved a -> a
 
-readUnsolvedMetaVar :: MonadIO m => MetaVar -> m MetaEntry
-readUnsolvedMetaVar mvar = do
-    readMetaVar mvar >>= \case
+readUnsolvedMetaVar :: MonadIO m => UnsolvedMetaVar -> m MetaEntry
+readUnsolvedMetaVar m = do
+    readMetaVar m >>= \case
         me@(Unsolved _) -> return me
         _ -> error "readUnsolvedMetaEntry: not an unsolved meta entry"
 
