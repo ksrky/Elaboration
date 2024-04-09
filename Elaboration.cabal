@@ -29,6 +29,7 @@ library
       Elab
       Eval
       Meta
+      Parse
       Parser
       Raw
       Syntax
