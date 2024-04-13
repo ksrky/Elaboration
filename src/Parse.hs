@@ -11,30 +11,41 @@ module Parse
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.List            qualified as L
 import Data.Map.Strict      qualified as M
 
+-- | Parser name, which can be a node label of the syntax tree.
 newtype Name = Name String
     deriving (Eq, Show)
 
+-- | Each expression expected by the operator has a binding power.
 type BindingPower = Int
 
+-- | Operator parser has a name, a list of symbols, and a list of binding powers.
 data OpParser t = OpParser
     { name     :: Name
     , symbols  :: [t]
     , bindPows :: [BindingPower]
     }
 
+-- | Leading operator parser expects an operator on the first token.
+-- For example, a infix operator, if-then-else, etc.
 type LeadingOpParser = OpParser
+
+-- | Trailing operator parser expects an operator on the second or later token.
+-- For example, binary operators, postfix operators, array's subscript, etc.
 type TrailingOpParser = OpParser
 
+-- | Operator table distinguishes between leading and trailing operator parsers.
 data OpTable t = OpTable
     { leadingOps  :: M.Map t [LeadingOpParser t]
     , trailingOps :: M.Map t [TrailingOpParser t]
     }
 
+-- | Parser monad has operator table, token stream, and error handling.
 type ParserM t = ReaderT (OpTable t) (StateT [t] (Except String))
 
-type ParserFn t = OpParser t -> ParserM t Syntax
+type ParserFn t a = OpParser t -> ParserM t a
 
 runParserM :: ParserM t a -> OpTable t -> [t] -> IO a
 runParserM m table toks = case runExcept (evalStateT (runReaderT m table) toks) of
@@ -72,65 +83,75 @@ matchToken p = do
         then return ()
         else throwError "tokens unmatched"
 
-getLeadingOpParsers :: Ord t => t -> ParserM t [LeadingOpParser t]
-getLeadingOpParsers tok = do
-    lops <- asks leadingOps
-    return $ concat $ M.lookup tok lops
-
-getTrailingOpParsers :: Ord t => t -> ParserM t [TrailingOpParser t]
-getTrailingOpParsers tok = do
-    tops <- asks trailingOps
-    return $ concat $ M.lookup tok tops
-
-data Syntax = Node Name [Syntax] | Atom String
-    deriving (Eq, Show)
-
-mkAtom :: Token t => t -> Syntax
-mkAtom inp = Atom $ tokenString inp
-
-parseOpRest :: Token t => BindingPower -> [t] -> [BindingPower] -> ParserM t [Syntax]
-parseOpRest curbp _ (bp : _) | bp < curbp = throwError "lower bp"
-parseOpRest _ [] (bp : _) = do
-    stx <- parseLeading bp
-    return [stx]
-parseOpRest curbp (sym : syms) (bp : bps) = do
-    stx <- parseLeading bp
-    matchToken (sym ==)
-    (stx :) <$> parseOpRest curbp syms bps
-parseOpRest _ _ [] = return []
-
-tryParsers :: forall t. Syntax -> [OpParser t] -> ParserFn t -> ParserM t Syntax
+tryParsers :: forall t a. a -> [OpParser t] -> ParserFn t a -> ParserM t a
 tryParsers def parsers parserFn = go parsers
   where
-    go :: [OpParser t] -> ParserM t Syntax
+    go :: [OpParser t] -> ParserM t a
     go [] = return def
     go (parser : rest) = do
         toks <- get
         parserFn parser `catchError` (\_ -> put toks >> go rest)
 
+getLeadingOpParsers :: Token t => t -> ParserM t [LeadingOpParser t]
+getLeadingOpParsers tok = do
+    lops <- asks leadingOps
+    return $ concat $ M.lookup tok lops
+
+getTrailingOpParsers :: Token t => t -> ParserM t [TrailingOpParser t]
+getTrailingOpParsers tok = do
+    tops <- asks trailingOps
+    return $ concat $ M.lookup tok tops
+
+-- | Generalized AST.
+data Syntax
+    = -- | @Name@ corresponds to a data constructor of the AST
+      -- and @[Syntax]@ is its field.
+      Node Name [Syntax]
+    | -- | Identifier or literal.
+      Atom String
+    deriving (Eq)
+
+instance Show Syntax where
+    show (Node (Name name) stxs) = name ++ " [" ++ L.intercalate ", " (map show stxs) ++ "]"
+    show (Atom str)              = show str
+
+-- | Construct an atom from a token.
+mkAtom :: Token t => t -> Syntax
+mkAtom = Atom . tokenString
+
+parseOpRest :: Token t => [t] -> [BindingPower] -> ParserM t [Syntax]
+parseOpRest [] (bp : _) = do
+    stx <- parseLeading bp
+    return [stx]
+parseOpRest (sym : syms) (bp : bps) = do
+    stx <- parseLeading bp
+    matchToken (sym ==)
+    (stx :) <$> parseOpRest syms bps
+parseOpRest _ [] = return []
+
 parseLeading :: Token t => BindingPower -> ParserM t Syntax
-parseLeading curbp = do
+parseLeading bp = do
     tok <- nextToken
     parsers <- getLeadingOpParsers tok
     lhs <- case parsers of
         [] -> return $ mkAtom tok
         _ -> tryParsers (mkAtom tok) parsers $ \parser -> do
-            stxs <- parseOpRest curbp (tail parser.symbols) parser.bindPows
+            stxs <- parseOpRest (tail parser.symbols) parser.bindPows
             return $ Node parser.name stxs
-    parseTrailing curbp lhs
+    parseTrailing bp lhs
 
 parseTrailing :: Token t => BindingPower -> Syntax -> ParserM t Syntax
-parseTrailing curbp lhs = do
+parseTrailing bp lhs = do
     tok <- peekToken
     parsers <- getTrailingOpParsers tok
     case parsers of
         [] -> return lhs
         _ -> tryParsers (mkAtom tok) parsers $ \parser -> do
-            when (head parser.bindPows < curbp) $ throwError "lower bp"
+            when (head parser.bindPows < bp) $ throwError "lower bp"
             nextToken_
-            stxs <- parseOpRest curbp (tail parser.symbols) (tail parser.bindPows)
+            stxs <- parseOpRest (tail parser.symbols) (tail parser.bindPows)
             let lhs' = Node parser.name (lhs : stxs)
-            parseTrailing curbp lhs'
+            parseTrailing bp lhs'
     `catchError` (\_ -> return lhs)
 
 parse :: Token t => ParserM t Syntax
@@ -140,13 +161,25 @@ sampleOpTable :: OpTable String
 sampleOpTable = OpTable
     { leadingOps = M.fromList
         [ ("-", [OpParser{name = Name "Minus", symbols = ["-"], bindPows = [75]}])
+        , ("if", [OpParser{name = Name "IfThenElse", symbols = ["if", "then", "else"], bindPows = [30, 30, 30]}])
+        , ("(", [OpParser{name = Name "Paren", symbols = ["(", ")"], bindPows = [0]}])
         ]
     , trailingOps = M.fromList
-        [ ("+", [OpParser{name = Name "Add", symbols = ["+"], bindPows = [65, 66]}])
+        [ ("||", [OpParser{name = Name "Or", symbols = ["||"], bindPows = [30, 31]}])
+        , ("&&", [OpParser{name = Name "And", symbols = ["&&"], bindPows = [35, 36]}])
+        , ("==", [OpParser{name = Name "Eq", symbols = ["=="], bindPows = [50, 51]}])
+        , ("+", [OpParser{name = Name "Add", symbols = ["+"], bindPows = [65, 66]}])
         , ("-", [OpParser{name = Name "Sub", symbols = ["-"], bindPows = [65, 66]}])
         , ("*", [OpParser{name = Name "Mul", symbols = ["*"], bindPows = [70, 71]}])
+        , ("[", [OpParser{name = Name "Subscript", symbols = ["[", "]"], bindPows = [100, 0]}])
         ]
     }
 
 test :: IO Syntax
-test = runParserM parse sampleOpTable ["1", "+", "2", "*", "-", "3"]
+test = runParserM parse sampleOpTable ["if", "1", "==", "2", "then", "3", "+", "4", "else", "5"]
+
+-- ["1", "+", "2", "*", "-", "3"]
+-- ["(", "1", "+", "2", ")", "*", "3"]
+-- ["if", "1", "==", "2", "then", "3", "+", "4", "else", "5"]
+-- ["1", "*", "(", "x", "+", "y", ")"]
+-- ["x", "+", "a", "[", "2", "]"]
