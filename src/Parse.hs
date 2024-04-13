@@ -1,76 +1,138 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 
-module Parse where
+module Parse
+    ( OpParser(..)
+    , OpTable(..)
+    , runParserM
+    , parse
+    , test
+    ) where
 
 import Control.Monad.Except
+import Control.Monad.Reader
 import Control.Monad.State
-
-type ParserM t a = StateT [t] (Except String) a
+import Data.Map.Strict      qualified as M
 
 type BindingPower = Int
 
-next :: ParserM t t
-next = do
+data OpParser t = OpParser
+    { name     :: String
+    , symbols  :: [t]
+    , bindPows :: [BindingPower]
+    }
+
+type LeadingOpParser = OpParser
+type TrailingOpParser = OpParser
+
+data OpTable t = OpTable
+    { leadingOps  :: M.Map t (LeadingOpParser t)
+    , trailingOps :: M.Map t (TrailingOpParser t)
+    }
+
+type ParserM t = ReaderT (OpTable t) (StateT [t] (Except String))
+
+runParserM :: ParserM t a -> OpTable t -> [t] -> IO a
+runParserM m table toks = case runExcept (evalStateT (runReaderT m table) toks) of
+    Left msg  -> putStrLn msg >> error "unexpected"
+    Right res -> return res
+
+class (Show t, Ord t) => Token t where
+    tokenString :: t -> String
+    tokenString = show
+
+instance Token String where
+    tokenString = id
+
+nextToken :: ParserM t t
+nextToken = do
     toks <- get
     case toks of
         x : xs -> put xs >> return x
-        []     -> throwError "no more tokens"
+        []     -> throwError "eof"
 
-next_ :: ParserM t ()
-next_ = void next
+nextToken_ :: ParserM t ()
+nextToken_ = void nextToken
 
-peek :: ParserM t t
-peek = do
+peekToken :: ParserM t t
+peekToken = do
     toks <- get
     case toks of
         x : _ -> return x
-        []    -> throwError "nothing to peek"
+        []    -> throwError "eof"
 
-getPrefixBP :: String -> ParserM t BindingPower
-getPrefixBP = undefined
+matchToken :: (t -> Bool) -> ParserM t ()
+matchToken p = do
+    tok <- nextToken
+    if p tok
+        then return ()
+        else throwError "tokens unmatched"
 
-getInfixBP :: String -> ParserM t (BindingPower, BindingPower)
-getInfixBP = undefined
+getLeadingOpParser :: Ord t => t -> ParserM t (Maybe (LeadingOpParser t))
+getLeadingOpParser tok = do
+    lops <- asks leadingOps
+    return $ M.lookup tok lops
 
-getPostfixBP :: String -> ParserM t BindingPower
-getPostfixBP = undefined
+getTrailingOpParser :: Ord t => t -> ParserM t (Maybe (LeadingOpParser t))
+getTrailingOpParser tok = do
+    lops <- asks trailingOps
+    return $ M.lookup tok lops
 
-data Token = TokAtom String | TokOp String | TokEof deriving (Eq, Show)
+data Syntax = Node String [Syntax] | Atom String | Missing deriving (Eq, Show)
 
-data Syntax = Node String [Syntax] | Atom String deriving (Eq, Show)
+parseAtom :: Token t => t -> ParserM t Syntax
+parseAtom inp = return $ Atom $ tokenString inp
 
-parsePrefix :: BindingPower -> ParserM Token Syntax
-parsePrefix bp = do
-    tok <- next
-    lhs <- case tok of
-        TokAtom x -> return $ Atom x
-        TokOp op -> do
-            rbp <- getPrefixBP op
-            rhs <- parsePrefix rbp
-            return $ Node op [rhs]
-        TokEof -> throwError "bad token"
-    parseInfix bp lhs
+parseOpRest :: Token t => BindingPower -> [t] -> [BindingPower] -> ParserM t [Syntax]
+parseOpRest curbp _ (bp : _) | bp < curbp = throwError "lower bp"
+parseOpRest _ [] (bp : _) = do
+    stx <- parseLeading bp
+    return [stx]
+parseOpRest curbp (sym : syms) (bp : bps) = do
+    stx <- parseLeading bp
+    matchToken (sym ==)
+    (stx :) <$> parseOpRest curbp syms bps
+parseOpRest _ _ [] = return []
 
-parseInfix :: BindingPower -> Syntax -> ParserM Token Syntax
-parseInfix bp lhs = do
-    tok <- peek
-    case tok of
-        TokAtom{} -> throwError "bad token"
-        TokOp op -> do
-            lhs' <- parsePostfix bp lhs op
-            (lbp, rbp) <- getInfixBP op
-            if lbp < bp then return lhs'
-            else do
-                next_
-                rhs <- parsePrefix rbp
-                return $ Node op [lhs', rhs]
-        TokEof -> return lhs
+parseLeading :: Token t => BindingPower -> ParserM t Syntax
+parseLeading curbp = do
+    tok <- nextToken
+    mb_parser <- getLeadingOpParser tok
+    lhs <- case mb_parser of
+        Nothing -> parseAtom tok
+        Just parser -> do
+            stxs <- parseOpRest curbp (tail parser.symbols) parser.bindPows
+            return $ Node parser.name stxs
+        `catchError` (\_ -> parseAtom tok) -- TODO: multimap, backtrack
+    parseTrailing curbp lhs
 
-parsePostfix :: BindingPower -> Syntax -> String -> ParserM Token Syntax
-parsePostfix bp lhs op = do
-    lbp <- getPostfixBP op
-    if lbp < bp then return lhs
-    else do
-        next_
-        return $ Node op [lhs]
+parseTrailing :: Token t => BindingPower -> Syntax -> ParserM t Syntax
+parseTrailing curbp lhs = do
+    tok <- peekToken
+    mb_parser <- getTrailingOpParser tok
+    case mb_parser of
+        Nothing     -> return lhs
+        Just parser -> do
+            when (head parser.bindPows < curbp) $ throwError "lower bp"
+            nextToken_
+            stxs <- parseOpRest curbp (tail parser.symbols) (tail parser.bindPows)
+            let lhs' = Node parser.name (lhs : stxs)
+            parseTrailing curbp lhs'
+    `catchError` (\_ -> return lhs) -- TODO: multimap, backtrack
 
+parse :: Token t => ParserM t Syntax
+parse = parseLeading 0
+
+sampleOpTable :: OpTable String
+sampleOpTable = OpTable
+    { leadingOps   = M.fromList
+        [ ("-", OpParser{name = "Minus", symbols = ["-"], bindPows = [75]})
+        ]
+    , trailingOps = M.fromList
+        [ ("+", OpParser{name="Add", symbols=["+"], bindPows = [65, 66]})
+        , ("-", OpParser{name="Sub", symbols=["-"], bindPows = [65, 66]})
+        , ("*", OpParser{name="Mul", symbols=["*"], bindPows = [70, 71]})
+        ]
+    }
+
+test :: IO Syntax
+test = runParserM parse sampleOpTable ["1", "+", "2", "+", "3"]
