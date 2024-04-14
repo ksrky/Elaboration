@@ -29,13 +29,14 @@ data OpParser t = OpParser
     , symbols  :: [t]
     , bindPows :: [BindingPower]
     }
+    deriving (Show)
 
 -- | Leading operator parser expects an operator on the first token.
--- For example, a infix operator, if-then-else, etc.
+-- For example, a prefix operator, if-then-else, etc.
 type LeadingOpParser = OpParser
 
 -- | Trailing operator parser expects an operator on the second or later token.
--- For example, binary operators, postfix operators, array's subscript, etc.
+-- For example, infix operators, postfix operators, array's subscript, etc.
 type TrailingOpParser = OpParser
 
 -- | Operator table distinguishes between leading and trailing operator parsers.
@@ -50,22 +51,23 @@ type ParserLogicM t m = StateT [t] (LogicT m)
 runParserLogicM :: Applicative m => ParserLogicM t m a -> [t] -> m [(a, [t])]
 runParserLogicM m toks = observeAllT (runStateT m toks)
 
-evalParserLogicM :: Applicative m => ParserLogicM t m a -> [t] -> m [a]
-evalParserLogicM m toks = observeAllT (evalStateT m toks)
-
 liftParserLogicM :: Monad m => m a -> ParserLogicM t m a
 liftParserLogicM = lift . lift
 
 -- | Parser monad has operator table, token stream, and error handling.
 type ParserM t = ParserLogicM t (ReaderT (OpTable t) (Except String))
 
-runParserM :: ParserM t a -> [t] -> OpTable t -> IO a
-runParserM m toks table = case runExcept (runReaderT (evalParserLogicM m toks) table) of
-    Left msg        -> putStrLn msg >> error "unexpected"
-    Right []        -> error "no answer"
-    Right (res : _) -> return res
+runParserM :: Token t => ParserM t a -> [t] -> OpTable t -> IO a
+runParserM m toks table = case runExcept (runReaderT (runParserLogicM m toks) table) of
+    Left msg             -> error msg
+    Right []             -> error "no result"
+    Right [(res, [])]    -> return res
+    Right [(_, tok : _)] -> error $ "parse error at " ++ show tok
+    Right _              -> error "multiple results"
 
 type ParserFn t a = OpParser t -> ParserM t a
+
+-- * Token
 
 class (Show t, Ord t) => Token t where
     tokenString :: t -> String
@@ -98,6 +100,7 @@ matchToken p = do
         then return ()
         else throwError "tokens unmatched"
 
+-- | Extracts the longest result from 'ParserLogicM'.
 longestMatch :: ParserM t a -> ParserM t a
 longestMatch m = do
     toks <- get
@@ -107,8 +110,8 @@ longestMatch m = do
     put toks'
     return x
 
+-- | Tries mutiple parsers in 'ParserLogicM'.
 tryParsers :: [OpParser t] -> ParserFn t a -> ParserM t a
-tryParsers [] _ = throwError "no parsers"
 tryParsers parsers parserFn = do
     parser <- foldr ((<|>) . pure) empty parsers
     parserFn parser `catchError` const empty
@@ -140,15 +143,15 @@ instance Show Syntax where
 mkAtom :: Token t => t -> Syntax
 mkAtom = Atom . tokenString
 
-parseOpRest :: Token t => [t] -> [BindingPower] -> ParserM t [Syntax]
-parseOpRest [] (bp : _) = do
-    stx <- parseLeading bp
-    return [stx]
-parseOpRest (sym : syms) (bp : bps) = do
+parseRestOps :: Token t => [t] -> [BindingPower] -> ParserM t [Syntax]
+parseRestOps [] bps = mapM parseLeading bps
+parseRestOps (sym : syms) (bp : bps) = do
     stx <- parseLeading bp
     matchToken (sym ==)
-    (stx :) <$> parseOpRest syms bps
-parseOpRest _ [] = return []
+    (stx :) <$> parseRestOps syms bps
+parseRestOps syms [] = do
+    mapM_ (matchToken  . (==)) syms
+    return []
 
 parseLeading :: Token t => BindingPower -> ParserM t Syntax
 parseLeading bp = do
@@ -156,7 +159,7 @@ parseLeading bp = do
     parsers <- getLeadingOpParsers tok
     lhs <- do
         longestMatch $ tryParsers parsers $ \parser -> do
-            stxs <- parseOpRest (tail parser.symbols) parser.bindPows
+            stxs <- parseRestOps (tail parser.symbols) parser.bindPows
             return $ Node parser.name stxs
         `catchError` (\_ -> return $ mkAtom tok)
     parseTrailing bp lhs
@@ -168,7 +171,7 @@ parseTrailing bp lhs = do
     longestMatch $ tryParsers parsers $ \parser -> do
         when (head parser.bindPows < bp) $ throwError "lower bp"
         nextToken_
-        stxs <- parseOpRest (tail parser.symbols) (tail parser.bindPows)
+        stxs <- parseRestOps (tail parser.symbols) (tail parser.bindPows)
         let lhs' = Node parser.name (lhs : stxs)
         parseTrailing bp lhs'
     `catchError` (\_ -> return lhs)
@@ -186,9 +189,10 @@ sampleOpTable = OpTable
         , ("(",  [OpParser{name = Name "Paren", symbols = ["(", ")"], bindPows = [0]}])
         ]
     , trailingOps = M.fromList
-        [ ("||", [OpParser{name = Name "Or", symbols = ["||"], bindPows = [30, 31]}])
+        [ (",",  [OpParser{name = Name "Tuple", symbols = [","], bindPows = [11, 10]}])
+        , ("||", [OpParser{name = Name "Or", symbols = ["||"], bindPows = [30, 31]}])
         , ("&&", [OpParser{name = Name "And", symbols = ["&&"], bindPows = [35, 36]}])
-        , ("==", [OpParser{name = Name "Eq", symbols = ["=="], bindPows = [50, 51]}])
+        , ("==", [OpParser{name = Name "Eq", symbols = ["=="], bindPows = [50, 50]}])
         , ("+",  [OpParser{name = Name "Add", symbols = ["+"], bindPows = [65, 66]}])
         , ("-",  [OpParser{name = Name "Sub", symbols = ["-"], bindPows = [65, 66]}])
         , ("*",  [OpParser{name = Name "Mul", symbols = ["*"], bindPows = [70, 71]}])
@@ -197,10 +201,13 @@ sampleOpTable = OpTable
     }
 
 test :: IO Syntax
-test = runParserM parse ["if", "1", "==", "2", "then", "3", "+", "4", "else", "5"] sampleOpTable
+test = runParserM parse [] sampleOpTable
 
 -- ["1", "+", "2", "*", "-", "3"]
 -- ["(", "1", "+", "2", ")", "*", "3"]
 -- ["if", "1", "==", "2", "then", "3", "+", "4", "else", "5"]
 -- ["1", "*", "(", "x", "+", "y", ")"]
 -- ["x", "+", "a", "[", "2", "]"]
+-- ["if", "1", "==", "2", "then", "if", "3", "then", "4", "else", "5"]
+-- ["if", "1", "==", "2", "then", "3", "else", "if", "4", "then", "5", "else", "6"]
+-- ["x", ",", "y", ",", "z"]
