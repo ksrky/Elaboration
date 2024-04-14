@@ -29,8 +29,8 @@ library
       Elab
       Eval
       Meta
-      Parse
       Parser
+      Parser.Expr
       Raw
       Syntax
       Unify

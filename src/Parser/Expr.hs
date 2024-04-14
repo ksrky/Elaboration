@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module Parse
+module Parser.Expr
     ( OpParser(..)
     , OpTable(..)
     , runParserM
@@ -45,6 +45,8 @@ data OpTable t = OpTable
     , trailingOps :: M.Map t [TrailingOpParser t]
     }
 
+-- * Monads
+
 -- | Parser logic monad.
 type ParserLogicM t m = StateT [t] (LogicT m)
 
@@ -76,6 +78,8 @@ class (Show t, Ord t) => Token t where
 instance Token String where
     tokenString = id
 
+-- ** Operation on token stream
+
 nextToken :: ParserM t t
 nextToken = do
     toks <- get
@@ -99,6 +103,8 @@ matchToken p = do
     if p tok
         then return ()
         else throwError "tokens unmatched"
+
+-- ** Parser utilities
 
 -- | Extracts the longest result from 'ParserLogicM'.
 longestMatch :: ParserM t a -> ParserM t a
@@ -126,6 +132,8 @@ getTrailingOpParsers tok = do
     tops <- asks trailingOps
     return $ concat $ M.lookup tok tops
 
+-- * Syntax
+
 -- | Generalized AST.
 data Syntax
     = -- | @Name@ corresponds to a data constructor of the AST
@@ -143,15 +151,17 @@ instance Show Syntax where
 mkAtom :: Token t => t -> Syntax
 mkAtom = Atom . tokenString
 
+-- ** Parser combinators
+
 parseRestOps :: Token t => [t] -> [BindingPower] -> ParserM t [Syntax]
 parseRestOps [] bps = mapM parseLeading bps
+parseRestOps syms [] = do
+    mapM_ (matchToken  . (==)) syms
+    return []
 parseRestOps (sym : syms) (bp : bps) = do
     stx <- parseLeading bp
     matchToken (sym ==)
     (stx :) <$> parseRestOps syms bps
-parseRestOps syms [] = do
-    mapM_ (matchToken  . (==)) syms
-    return []
 
 parseLeading :: Token t => BindingPower -> ParserM t Syntax
 parseLeading bp = do
@@ -179,6 +189,8 @@ parseTrailing bp lhs = do
 parse :: Token t => ParserM t Syntax
 parse = parseLeading 0
 
+-- * Samples
+
 sampleOpTable :: OpTable String
 sampleOpTable = OpTable
     { leadingOps = M.fromList
@@ -186,7 +198,8 @@ sampleOpTable = OpTable
         , ("if", [ OpParser{name = Name "IfThenElse", symbols = ["if", "then", "else"], bindPows = [30, 30, 30]}
                  , OpParser{name = Name "IfThen", symbols = ["if", "then"], bindPows = [30, 30]}
                  ])
-        , ("(",  [OpParser{name = Name "Paren", symbols = ["(", ")"], bindPows = [0]}])
+        , ("(",  [ OpParser{name = Name "Paren", symbols = ["(", ")"], bindPows = [0]}
+                 , OpParser{name = Name "Unit", symbols = ["(", ")"], bindPows = []}])
         ]
     , trailingOps = M.fromList
         [ (",",  [OpParser{name = Name "Tuple", symbols = [","], bindPows = [11, 10]}])
@@ -211,3 +224,5 @@ test = runParserM parse [] sampleOpTable
 -- ["if", "1", "==", "2", "then", "if", "3", "then", "4", "else", "5"]
 -- ["if", "1", "==", "2", "then", "3", "else", "if", "4", "then", "5", "else", "6"]
 -- ["x", ",", "y", ",", "z"]
+-- ["1", "-", "-", "2"]
+-- ["(", ")"]
