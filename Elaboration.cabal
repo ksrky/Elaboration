@@ -31,6 +31,11 @@ library
       Meta
       Parser
       Parser.Expr
+      Parser.Monad
+      Parser.Pratt
+      Parser.Sample
+      Parser.TH
+      Parser.Types
       Raw
       Syntax
       Unify
@@ -60,6 +65,7 @@ library
     , prettyprinter
     , recursion-schemes
     , safe-exceptions
+    , template-haskell
     , text
     , vector
   default-language: GHC2021

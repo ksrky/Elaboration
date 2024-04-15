@@ -116,7 +116,7 @@ longestMatch m = do
     put toks'
     return x
 
--- | Tries mutiple parsers in 'ParserLogicM'.
+-- | Tries multiple parsers in 'ParserLogicM'.
 tryParsers :: [OpParser t] -> ParserFn t a -> ParserM t a
 tryParsers parsers parserFn = do
     parser <- foldr ((<|>) . pure) empty parsers
