@@ -12,25 +12,25 @@ import Text.ParserCombinators.ReadP
 pInt :: ReadP Int
 pInt = munch1 (`elem` ['0'..'9']) <&> read
 
-pOp :: ReadP (OpExp String)
-pOp = do
+pOperator :: ReadP (Oper String)
+pOperator = do
     _ <- char '"'
     op <- munch1 (/= '"')
     _ <- char '"'
-    return $ Op op
+    return $ Operator op
 
-pExp :: ReadP (OpExp String)
-pExp = do
+pOperand :: ReadP (Oper String)
+pOperand = do
     _ <- char ':'
-    Exp <$> pInt
+    Operand <$> pInt
 
-pOpExp :: ReadP (OpExp String)
-pOpExp = pOp +++ pExp
+pOpExp :: ReadP (Oper String)
+pOpExp = pOperator +++ pOperand
 
-ppOpExps :: ReadP [OpExp String]
+ppOpExps :: ReadP [Oper String]
 ppOpExps = some (skipSpaces >> pOpExp) <* eof
 
-parseSyntaxDecl :: String -> [OpExp String]
+parseSyntaxDecl :: String -> [Oper String]
 parseSyntaxDecl s = case readP_to_S ppOpExps s of
     [(oes, "")] -> oes
     _           -> fail "parse error"

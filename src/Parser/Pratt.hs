@@ -11,6 +11,7 @@ import Data.Either
 import Data.List                  qualified as L
 import Data.Map.Strict            qualified as M
 import Data.Vector                qualified as V
+import Debug.Trace
 import Parser.Monad
 import Parser.Types
 
@@ -49,15 +50,14 @@ mkAtom :: Token t => t -> ParserM t ()
 mkAtom = pushSyntax . Atom . tokenString
 
 mkNode :: Name -> Int -> ParserM t ()
-mkNode name baseSz = mkNode' []
+mkNode name = mkNode' []
   where
-    mkNode' :: [Syntax] -> ParserM t ()
-    mkNode' stxs = do
-        sz <- use $ tokens.to length
-        if sz == baseSz then pushSyntax $ Node name stxs
-        else do
+    mkNode' :: [Syntax] -> Int -> ParserM t ()
+    mkNode' stxs n
+        | n == 0 = pushSyntax $ Node name stxs
+        | otherwise = do
             stx <- popSyntax
-            mkNode' (stx : stxs)
+            mkNode' (stx : stxs) (n - 1)
 
 parseLeading :: Token t => ParserM t ()
 parseLeading = do
@@ -73,15 +73,19 @@ parseTrailing = do
     tok <- peekToken
     parsers <- getTrailingParsers tok
     longestMatch $ tryParsers parsers
-    `catchError` (\_ -> return ())
+    `catchError` (\e -> do
+        toks <- use tokens
+        stxs <- use stxStack
+        traceShowM (e, toks, stxs)
+        return ())
 
 parse :: Token t => Parser t
 parse = execStateT parseLeading
 
-parseOpExps :: Token t => [OpExp t] -> ParserM t ()
+parseOpExps :: Token t => [Oper t] -> ParserM t ()
 parseOpExps oes = forM_ oes $ \case
-    Op tok -> matchToken (tok ==)
-    Exp bp -> bindPow .= bp >> parseLeading
+    Operator tok -> matchToken (tok ==)
+    Operand bp -> bindPow .= bp >> parseLeading
 
 insertParser :: Token t => (t, Parser t) -> M.Map t [Parser t] -> M.Map t [Parser t]
 insertParser (k, p) tbl =
@@ -92,22 +96,25 @@ insertParser (k, p) tbl =
 type EitherParser t = Either (M.Map t [Parser t] -> M.Map t [Parser t]) (M.Map t [Parser t] -> M.Map t [Parser t])
 
 insertMixfixOp :: Token t => MixfixOp t -> EitherParser t
-insertMixfixOp MixfixOp{name, opExps = oes@(Op op0 : _)} = do
-    let parser = execStateT $ do
-            baseSz <- use $ tokens.to length
-            parseOpExps oes
-            mkNode name baseSz
-    Left $ insertParser (op0, parser)
-insertMixfixOp MixfixOp{name, opExps = Exp bp0 : Op op1 : oes} = do
-    let parser = execStateT $ do
+insertMixfixOp MixfixOp{name, opers = opers@(Operator tok0 : _)} = do
+    let arity = length $ filter (\case Operand _ -> True; _ -> False) opers
+        parser = execStateT $ do
+            bp <- use bindPow
+            parseOpExps opers
+            bindPow .= bp
+            mkNode name arity
+    Left $ insertParser (tok0, parser)
+insertMixfixOp MixfixOp{name, opers = opers@(Operand bp0 : Operator tok1 : opers')} = do
+    let arity = length $ filter (\case Operand _ -> True; _ -> False) opers
+        parser = execStateT $ do
             bp <- use bindPow
             when (bp0 < bp) $ throwError "lower bp"
             nextToken_
-            baseSz <- use $ tokens.to length
-            parseOpExps oes
-            mkNode name (baseSz - 1)
+            parseOpExps opers'
+            bindPow .= bp
+            mkNode name arity
             parseTrailing
-    Right$ insertParser (op1, parser)
+    Right$ insertParser (tok1, parser)
 insertMixfixOp _ = error "invalid mixfix op"
 
 insertMixfixOps :: Token t => [MixfixOp t] -> ParserTable t -> ParserTable t

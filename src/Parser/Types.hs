@@ -26,19 +26,19 @@ instance Token String where
 instance Token T.Text where
     tokenString = T.unpack
 
--- * Operator
-data OpExp t
-    = Op t
-    | Exp BindingPower
+-- * Operator or Operand
+data Oper t
+    = Operator t
+    | Operand BindingPower
     deriving (TH.Lift)
 
-instance Show t => Show (OpExp t) where
-    show (Op t)   = show t
-    show (Exp bp) = ':' : show bp
+instance Show t => Show (Oper t) where
+    show (Operator t) = show t
+    show (Operand bp) = ':' : show bp
 
 data MixfixOp t = MixfixOp
-    { name   :: Name
-    , opExps :: [OpExp t]
+    { name  :: Name
+    , opers :: [Oper t]
     }
     deriving (Show)
 
