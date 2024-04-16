@@ -84,9 +84,7 @@ insertParser (k, p) tbl = case M.lookup k tbl of
     Nothing  -> M.insert k [p] tbl
     Just ps' -> M.insert k (p : ps') tbl
 
-type EitherParser t = Either (M.Map t [Parser t] -> M.Map t [Parser t]) (M.Map t [Parser t] -> M.Map t [Parser t])
-
-insertMixfixOp :: Token t => MixfixOp t -> EitherParser t
+insertMixfixOp :: Token t => MixfixOp t -> Either (t, Parser t) (t, Parser t)
 insertMixfixOp MixfixOp{name, opers = Operator tok0 : opers} = do
     let arity = length $ filter (\case Operand _ -> True; _ -> False) opers
         parser = execStateT $ do
@@ -94,7 +92,7 @@ insertMixfixOp MixfixOp{name, opers = Operator tok0 : opers} = do
             parseOpExps opers
             bindPow .= bp
             mkNode name arity
-    Left $ insertParser (tok0, parser)
+    Left (tok0, parser)
 insertMixfixOp MixfixOp{name, opers = Operand bp0 : Operator tok1 : opers} = do
     let arity = 1 + length (filter (\case Operand _ -> True; _ -> False) opers)
         parser = execStateT $ do
@@ -105,23 +103,21 @@ insertMixfixOp MixfixOp{name, opers = Operand bp0 : Operator tok1 : opers} = do
             bindPow .= bp
             mkNode name arity
             parseTrailing
-    Right $ insertParser (tok1, parser)
+    Right (tok1, parser)
 insertMixfixOp _ = error "invalid mixfix op"
 
-insertMixfixOps :: Token t => [MixfixOp t] -> ParserTable t -> ParserTable t
-insertMixfixOps mixfixOps tbl = do
+initParserTable :: Token t => [MixfixOp t] -> ParserTable t
+initParserTable mixfixOps = do
     let (lps, tps) = partitionEithers $ map insertMixfixOp mixfixOps
     ParserTable
-        { leadingParsers = foldr ($) (leadingParsers tbl) lps
-        , trailingParsers = foldr ($) (trailingParsers tbl) tps
+        { leadingParsers = M.fromList $ groupParsers lps
+        , trailingParsers = M.fromList $ groupParsers tps
         }
 
-{-
 groupParsers :: forall t. Token t => [(t, Parser t)] -> [(t, [Parser t])]
-groupParsers = go . L.sortOn fst
+groupParsers = group . L.sortOn fst
   where
-    go :: [(t, Parser t)] -> [(t, [Parser t])]
-    go [] = []
-    go ((k, v) : xs) = (k, v : map snd ys) : go zs
+    group :: [(t, Parser t)] -> [(t, [Parser t])]
+    group [] = []
+    group ((k, v) : xs) = (k, v : map snd ys) : group zs
         where (ys, zs) = span ((k ==) . fst) xs
--}

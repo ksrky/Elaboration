@@ -47,9 +47,6 @@ data ParserTable t = ParserTable
     , trailingParsers :: M.Map t [TrailingParser t]
     }
 
-emptyParserTable :: ParserTable t
-emptyParserTable = ParserTable M.empty M.empty
-
 type ParserLogic t = LogicT (ParserInnerM t)
 
 nextToken :: ParserM t t

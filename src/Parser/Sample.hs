@@ -29,7 +29,7 @@ mixfixOps =
 sample :: IO ()
 sample = do
     let _ = [syntax| :65 "+" :70 |] :: [Oper String]
-    let parserTable = insertMixfixOps mixfixOps emptyParserTable
-    case runParserM parserTable parse [] of
+    let parserTable = initParserTable mixfixOps
+    case runParserM parserTable parse ["f", "x"] of
         Left err -> putStrLn err
         Right s  -> print $ V.head $ s ^. stxStack
