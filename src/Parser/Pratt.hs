@@ -11,7 +11,6 @@ import Data.Either
 import Data.List                  qualified as L
 import Data.Map.Strict            qualified as M
 import Data.Vector                qualified as V
-import Debug.Trace
 import Parser.Monad
 import Parser.Types
 
@@ -34,17 +33,16 @@ getTrailingParsers tok = do
     tps <- asks trailingParsers
     return $ concat $ M.lookup tok tps
 
-longestMatch :: ParserLogic t -> ParserM t ()
-longestMatch m = do
-    let parsers = observeAll m
-    when (null parsers) $ throwError "no parsers"
+longestMatch :: [Parser t] -> ParserM t ()
+longestMatch parsers = do
     st <- get
-    sts <- lift $ sequence $ parsers ?? st
-    let st' = head $ L.sortOn (\s -> length (s ^. tokens)) sts
+    sts <- lift $ observeAllT $ tryParsers parsers st
+    when (null sts) $ throwError "no match parsers"
+    let st' = head $ L.sortOn (^. tokens.to length) sts
     put st'
 
-tryParsers :: [Parser t] -> ParserLogic t
-tryParsers = foldr ((<|>) . pure) empty
+tryParsers :: [Parser t] -> ParserState t -> ParserLogic t (ParserState t)
+tryParsers parsers st = foldr (\p -> (lift (p st) `catchError` const empty <|>)) empty parsers
 
 mkAtom :: Token t => t -> ParserM t ()
 mkAtom = pushSyntax . Atom . tokenString
@@ -63,21 +61,15 @@ parseLeading :: Token t => ParserM t ()
 parseLeading = do
     tok <- nextToken
     parsers <- getLeadingParsers tok
-    do
-        longestMatch $ tryParsers parsers
-        `catchError` (\_ -> mkAtom tok)
+    longestMatch parsers `catchError` (\_ -> mkAtom tok)
     parseTrailing
 
 parseTrailing :: Token t => ParserM t ()
 parseTrailing = do
     tok <- peekToken
     parsers <- getTrailingParsers tok
-    longestMatch $ tryParsers parsers
-    `catchError` (\e -> do
-        toks <- use tokens
-        stxs <- use stxStack
-        traceShowM (e, toks, stxs)
-        return ())
+    longestMatch parsers
+    `catchError` (\_ -> return ())
 
 parse :: Token t => Parser t
 parse = execStateT parseLeading
@@ -88,15 +80,14 @@ parseOpExps oes = forM_ oes $ \case
     Operand bp -> bindPow .= bp >> parseLeading
 
 insertParser :: Token t => (t, Parser t) -> M.Map t [Parser t] -> M.Map t [Parser t]
-insertParser (k, p) tbl =
-    case M.lookup k tbl of
-        Nothing  -> M.insert k [p] tbl
-        Just ps' -> M.insert k (p : ps') tbl
+insertParser (k, p) tbl = case M.lookup k tbl of
+    Nothing  -> M.insert k [p] tbl
+    Just ps' -> M.insert k (p : ps') tbl
 
 type EitherParser t = Either (M.Map t [Parser t] -> M.Map t [Parser t]) (M.Map t [Parser t] -> M.Map t [Parser t])
 
 insertMixfixOp :: Token t => MixfixOp t -> EitherParser t
-insertMixfixOp MixfixOp{name, opers = opers@(Operator tok0 : _)} = do
+insertMixfixOp MixfixOp{name, opers = Operator tok0 : opers} = do
     let arity = length $ filter (\case Operand _ -> True; _ -> False) opers
         parser = execStateT $ do
             bp <- use bindPow
@@ -104,17 +95,17 @@ insertMixfixOp MixfixOp{name, opers = opers@(Operator tok0 : _)} = do
             bindPow .= bp
             mkNode name arity
     Left $ insertParser (tok0, parser)
-insertMixfixOp MixfixOp{name, opers = opers@(Operand bp0 : Operator tok1 : opers')} = do
-    let arity = length $ filter (\case Operand _ -> True; _ -> False) opers
+insertMixfixOp MixfixOp{name, opers = Operand bp0 : Operator tok1 : opers} = do
+    let arity = 1 + length (filter (\case Operand _ -> True; _ -> False) opers)
         parser = execStateT $ do
             bp <- use bindPow
             when (bp0 < bp) $ throwError "lower bp"
             nextToken_
-            parseOpExps opers'
+            parseOpExps opers
             bindPow .= bp
             mkNode name arity
             parseTrailing
-    Right$ insertParser (tok1, parser)
+    Right $ insertParser (tok1, parser)
 insertMixfixOp _ = error "invalid mixfix op"
 
 insertMixfixOps :: Token t => [MixfixOp t] -> ParserTable t -> ParserTable t

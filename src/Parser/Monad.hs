@@ -50,7 +50,7 @@ data ParserTable t = ParserTable
 emptyParserTable :: ParserTable t
 emptyParserTable = ParserTable M.empty M.empty
 
-type ParserLogic t = Logic (Parser t)
+type ParserLogic t = LogicT (ParserInnerM t)
 
 nextToken :: ParserM t t
 nextToken = do

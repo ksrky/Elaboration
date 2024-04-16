@@ -16,7 +16,7 @@ mixfixOps =
     , MixfixOp (Name "IfThen") [Operator "if", Operand 30, Operator "then", Operand 30]
     , MixfixOp (Name "Paren") [Operator "(", Operand 0, Operator ")"]
     , MixfixOp (Name "Unit") [Operator "(", Operator ")"]
-    , MixfixOp (Name "Tuple") [Operator "(", Operand 11, Operator ",", Operand 10, Operator ")"]
+    , MixfixOp (Name "Tuple") [Operand 11, Operator ",", Operand 10]
     , MixfixOp (Name "Or") [Operand 30, Operator "||", Operand 31]
     , MixfixOp (Name "And") [Operand 35, Operator "&&", Operand 36]
     , MixfixOp (Name "Eq") [Operand 50, Operator "==", Operand 50]
@@ -30,6 +30,6 @@ sample :: IO ()
 sample = do
     let _ = [syntax| :65 "+" :70 |] :: [Oper String]
     let parserTable = insertMixfixOps mixfixOps emptyParserTable
-    case runParserM parserTable parse ["1", "*", "2", "*", "3"] of
+    case runParserM parserTable parse [] of
         Left err -> putStrLn err
         Right s  -> print $ V.head $ s ^. stxStack
